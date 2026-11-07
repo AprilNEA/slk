@@ -4,16 +4,20 @@ A personal Slack CLI for developers, scripts, and coding agents, written in Rust
 
 Read and search Slack, work with messages, users, files, channels, schedules, and Canvas documents, or expose read-only tools to a local MCP client. Writes require approval. Persistent credentials stay in the system keyring; headless sessions use explicit in-memory injection. slk does not cache messages or install a background service.
 
-**Unreleased.** Local contract tests do not establish live Slack compatibility. Browser login and browser search are experimental. An upstream HTTP 429 defect remains a release blocker. The package is not published to crates.io. See [verification limits](docs/development.md#verification-limits) and [release setup](docs/distribution.md#release-workflows).
+**Experimental.** The initial crates.io release retains a known HTTP 429 parsing defect in `slack-morphism`.
 
-## Install from source
+The affected responses lose their rate-limit classification and `Retry-After`; the regression test remains enabled and failing. Local contract tests do not establish live Slack compatibility. Browser login and browser search are experimental. See [verification limits](docs/development.md#verification-limits) and [release setup](docs/distribution.md#release-workflows).
+
+## Install
 
 Use current stable Rust on macOS, Linux, or Windows with the MSVC C++ build tools. A C compiler and linker are required; Linux builds compile the bundled libdbus:
 
 ```sh
-cargo install --path . --locked
+cargo install slk --locked
 slk --help
 ```
+
+To build a local checkout instead, use `cargo install --path . --locked`.
 
 Persistent authentication requires an unlocked macOS Keychain, Linux Secret Service, or Windows Credential Manager. Browser login additionally requires Chrome/Chromium and a graphical session. There is no plaintext credential fallback. See [distribution](docs/distribution.md) for local archives, platform requirements, and explicit self-update.
 

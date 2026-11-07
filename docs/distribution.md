@@ -1,6 +1,6 @@
 # Distribution and installation
 
-slk is unreleased. Local archives are build artifacts, not published releases or proof of live Slack compatibility. The known SDK 429 acceptance failure and [live workflow checks](development.md#verification-limits) remain release gates. Publishing, release tags, signing, and notarization require separate authorization.
+slk is experimental. The initial manual crates.io publication retains the known SDK 429 defect and does not establish live Slack compatibility. Local archives are build artifacts, not published GitHub Releases. Automated publication remains blocked by the failing SDK regression; [live workflow checks](development.md#verification-limits) remain incomplete. Publishing, release tags, signing, and notarization require explicit authorization.
 
 ## Install a local source build
 
@@ -70,30 +70,34 @@ The release sequence is:
 4. After approval through the `release` environment, verify the Cargo package and publish to crates.io. No build cache is restored by the publishing or archive jobs.
 5. Only after crates.io publication succeeds, create the GitHub Release with archives and per-archive SHA256 files. SemVer prereleases become GitHub prereleases and are excluded by self-update.
 
-Failed, cancelled, or skipped prerequisites cannot authorize publication. Only the crates.io job has `id-token: write`; only the GitHub Release job has `contents: write`. Checkouts do not persist credentials, reusable CI inherits no secrets, and tag and target values enter shell commands through quoted environment variables. `CI_TIMEOUT_MINUTES` is an optional repository variable overriding the default 60-minute timeout per job.
+Failed, cancelled, or skipped prerequisites cannot authorize automated publication. Only the crates.io job has `id-token: write`; only the GitHub Release job has `contents: write`. Checkouts do not persist credentials, reusable CI inherits no secrets, and tag and target values enter shell commands through quoted environment variables. `CI_TIMEOUT_MINUTES` is an optional repository variable overriding the default 60-minute timeout per job.
 
 ### Configure the first publication
 
-Repository files do not configure account permissions or authorize a release. Complete these steps before pushing a release tag:
+crates.io requires an existing crate before Trusted Publishing can be configured. The initial publication uses an explicitly approved manual bootstrap from a developer machine or orb. The known SDK failure stays visible in CI; this bootstrap is not a passing acceptance result.
 
 1. Confirm that the account may publish the `slk` crate name; an absent index entry is not a reservation. The root package is configured for crates.io publication under the [selected dual license](../README.md#license); `xtask` remains unpublished.
-2. Resolve the known SDK failure and complete the authorized live Slack and native platform acceptance checks. Local fixtures and archive help checks do not replace those gates.
-3. Protect the release branch and `v*` tags. Create a GitHub environment named `release` with required reviewers and tag restrictions. An `environment: release` label in YAML does not create reviewer protections; configure them in GitHub settings before enabling publication. Restrict who can change workflows and release settings.
-4. For the first crate publication, put an expiring crates.io API token in the `release` environment secret `CRATES_IO_BOOTSTRAP_TOKEN`, and set that environment's variable `CRATES_IO_BOOTSTRAP` to `true`. Grant only the token permissions needed for the initial publication. Never put a token in repository files, ordinary variables, command arguments, or chat.
-5. After the first publication succeeds, register a crates.io trusted publisher with the values below. Remove the bootstrap variable and secret, and revoke the bootstrap token. Later releases obtain a short-lived OIDC token; an OIDC error never falls back to the bootstrap secret.
+2. Review the CI results and known limitations before approving publication. Use a clean, committed checkout with the intended package version.
+3. Supply an expiring API token through the secret environment variable `CARGO_REGISTRY_TOKEN`. Grant only the token permissions needed for the initial publication. Never put a token in repository files, ordinary variables, command arguments, or chat.
+4. Run `cargo publish --locked --package slk --dry-run`, then run `cargo publish --locked --package slk` only with explicit publication approval. Cargo compiles the packaged source but does not run the test suite. Verify the published version before repeating a command whose outcome is uncertain.
+5. After the first publication succeeds, register a crates.io trusted publisher with the values below. Later releases obtain a short-lived OIDC token; an OIDC error never falls back to an API token.
 
 | crates.io trusted-publisher field | Value |
 | --- | --- |
-| Repository owner | `aprilnea` |
+| Repository owner | `AprilNEA` |
 | Repository name | `slk` |
 | Workflow filename | `release.yml` |
 | Environment | `release` |
 
-Use the workflow filename alone, not `.github/workflows/release.yml`. crates.io matches the originating workflow's `workflow_ref`; a reusable workflow's filename is not a substitute. See the [trusted-publishing documentation](https://crates.io/docs/trusted-publishing). The bootstrap step has a narrow, documented workflow-linter exception because crates.io requires an already-published crate before OIDC setup.
+Use the workflow filename alone, not `.github/workflows/release.yml`. crates.io matches the originating workflow's `workflow_ref`; a reusable workflow's filename is not a substitute. See the [trusted-publishing documentation](https://crates.io/docs/trusted-publishing).
+
+Protect `master` and `v*` tags. Create a GitHub environment named `release` with required reviewers and tag restrictions before enabling automated publication. An `environment: release` label in YAML does not create reviewer protections. Leave `CRATES_IO_BOOTSTRAP` unset when using OIDC; the workflow's alternative token-based bootstrap path is not needed for a local first publication. Revoke the initial API token after Trusted Publishing is configured and verified.
+
+Do not push the ordinary release tag to republish a version already uploaded locally. The current workflow attempts crates.io publication before creating the GitHub Release, so an existing crate version fails that job. The initial GitHub Release needs separate completion with verified archives; later unpublished versions use the normal tag workflow. The SDK regression and remaining acceptance checks still block automated releases.
 
 ### Publish an approved version
 
-Commit the intended version and updated lockfile, push the reviewed source, and wait for CI. Only after release approval, validate and push the matching tag. For the initial version:
+For an unpublished version, commit the intended version and updated lockfile, push the reviewed source, and wait for CI. Only after release approval, validate and push the matching tag. Before a manual bootstrap has published the initial version, the corresponding commands would be:
 
 ```sh
 cargo run --locked --package xtask -- plan --tag v0.0.1
