@@ -1,0 +1,76 @@
+name: CI
+
+on:
+  push:
+    branches: ["**"]
+  workflow_call:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.event_name }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref_type != 'tag' }}
+
+jobs:
+  check:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: ${{ fromJSON(vars.CI_TIMEOUT_MINUTES || '60') }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Install toolchain
+        run: rustup toolchain install
+      - name: Check formatting
+        run: cargo fmt --all -- --check
+      - name: Lint
+        run: cargo clippy --workspace --all-targets --locked -- -D warnings
+      - name: Build
+        run: cargo build --workspace --release --locked
+      - name: Test
+        run: cargo test --workspace --locked
+
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: ${{ fromJSON(vars.CI_TIMEOUT_MINUTES || '60') }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Install toolchain
+        run: rustup toolchain install
+      - name: Install dependency auditor
+        uses: taiki-e/install-action@3a3daafd3b7f23b8f65d9f5ba2db203fb59b79e2
+        with:
+          tool: cargo-audit@0.22.2
+      - name: Audit dependencies
+        run: cargo audit --deny warnings
+
+  package:
+    runs-on: ubuntu-latest
+    timeout-minutes: ${{ fromJSON(vars.CI_TIMEOUT_MINUTES || '60') }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Install toolchain
+        run: rustup toolchain install
+      - name: Verify crates.io package
+        run: cargo package --locked
+
+  workflows:
+    runs-on: ubuntu-latest
+    timeout-minutes: ${{ fromJSON(vars.CI_TIMEOUT_MINUTES || '60') }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Lint workflows
+        uses: jdx/jactionlint@9e87e8f34edfc00b849a27807e26eff9d00b936d # v2.5.0
+        with:
+          strict-exit: true

@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<title>Synthetic browser login</title>
+<body>
+<p>Local fixture. No Slack requests leave the browser.</p>
+<script>
+const mode = __MODE__;
+(async () => {
+  if (mode === "idle") return;
+  for (const url of [
+    "https://other.slack.com/api/client.boot",
+    "https://team.slack.com.evil.invalid/api/client.boot",
+    "/not-an-api",
+  ]) {
+    await fetch(url, {
+      method: "POST",
+      body: new URLSearchParams({ token: "xoxc-wrong", note: "noise" }),
+    });
+  }
+  let body;
+  let headers;
+  switch (mode) {
+    case "multipart":
+      body = new FormData();
+      body.append("note", "xoxc-decoy");
+      body.append("token", "xoxc-selected_123");
+      break;
+    case "form":
+      body = new URLSearchParams({ note: "xoxc-decoy", token: "xoxc-selected_123" });
+      break;
+    case "malformed":
+      body = '{"token":"xoxc-selected_123"';
+      headers = { "Content-Type": "application/json" };
+      break;
+    default:
+      body = JSON.stringify({ note: "xoxc-decoy", token: "xoxc-selected_123" });
+      headers = { "Content-Type": "application/json; charset=utf-8" };
+  }
+  await fetch("/api/client.boot", { method: "POST", body, headers });
+})();
+</script>
+</body>
+</html>

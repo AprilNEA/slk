@@ -1,0 +1,129 @@
+name: Release
+
+on:
+  pull_request:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  checks:
+    uses: $/.github/workflows/ci.yml
+
+  plan:
+    runs-on: ubuntu-latest
+    timeout-minutes: ${{ fromJSON(vars.CI_TIMEOUT_MINUTES || '60') }}
+    outputs:
+      tag: ${{ steps.plan.outputs.tag }}
+      prerelease: ${{ steps.plan.outputs.prerelease }}
+      dist-version: ${{ steps.plan.outputs.dist-version }}
+      matrix: ${{ steps.plan.outputs.matrix }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Install toolchain
+        run: rustup toolchain install
+      - name: Validate release plan
+        id: plan
+        env:
+          RELEASE_TAG: ${{ github.event_name == 'push' && github.ref_name || '' }}
+        run: cargo run --locked --package xtask -- plan --tag "$RELEASE_TAG" >> "$GITHUB_OUTPUT"
+
+  build:
+    needs: [checks, plan]
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.plan.outputs.matrix) }}
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: ${{ fromJSON(vars.CI_TIMEOUT_MINUTES || '60') }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Install toolchain
+        run: rustup toolchain install
+      - name: Install cargo-dist
+        uses: taiki-e/install-action@3a3daafd3b7f23b8f65d9f5ba2db203fb59b79e2
+        with:
+          tool: cargo-dist@${{ needs.plan.outputs.dist-version }}
+      - name: Build archive
+        env:
+          RELEASE_TAG: ${{ needs.plan.outputs.tag }}
+          TARGET: ${{ matrix.target }}
+        run: dist build --artifacts=local --target "$TARGET" --tag "$RELEASE_TAG" --print=linkage --output-format=json > dist-manifest.json
+      - name: Verify native archive
+        id: smoke
+        run: cargo run --locked --package xtask -- smoke --manifest dist-manifest.json >> "$GITHUB_OUTPUT"
+      - name: Upload verified archive and checksum
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: binaries-${{ matrix.target }}
+          path: ${{ steps.smoke.outputs.files }}
+          if-no-files-found: error
+          compression-level: 0
+          overwrite: true
+
+  publish-crates:
+    needs: [plan, build]
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    timeout-minutes: ${{ fromJSON(vars.CI_TIMEOUT_MINUTES || '60') }}
+    environment: release
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Install toolchain
+        run: rustup toolchain install
+      - name: Verify publishable package
+        run: cargo publish --locked --dry-run
+      - name: Authenticate with crates.io
+        if: vars.CRATES_IO_BOOTSTRAP != 'true'
+        uses: rust-lang/crates-io-auth-action@3268eb413133e2960fa4ae0e963ca76380c54cd9 # v1.0.6
+        id: auth
+      - name: Publish with OIDC
+        if: vars.CRATES_IO_BOOTSTRAP != 'true'
+        run: cargo publish --locked
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ steps.auth.outputs.token }}
+      - name: Publish the initial crate
+        if: vars.CRATES_IO_BOOTSTRAP == 'true'
+        run: cargo publish --locked # zizmor: ignore[use-trusted-publishing] crates.io requires an API token for the first publication.
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ secrets.CRATES_IO_BOOTSTRAP_TOKEN }}
+
+  publish-github:
+    needs: [plan, publish-crates]
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    timeout-minutes: ${{ fromJSON(vars.CI_TIMEOUT_MINUTES || '60') }}
+    environment: release
+    permissions:
+      contents: write
+    steps:
+      - name: Download verified archives
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          pattern: binaries-*
+          path: artifacts
+          merge-multiple: true
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ needs.plan.outputs.tag }}
+          PRERELEASE: ${{ needs.plan.outputs.prerelease }}
+        run: gh release create "$RELEASE_TAG" artifacts/* --repo "$GITHUB_REPOSITORY" --verify-tag --title "$RELEASE_TAG" --generate-notes --prerelease="$PRERELEASE"

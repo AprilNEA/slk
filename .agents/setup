@@ -1,0 +1,24 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+missing=()
+for package in build-essential ca-certificates curl dbus gnome-keyring xauth xvfb; do
+    if [[ "$(dpkg-query -W -f='${Status}' "$package" 2>/dev/null || true)" != "install ok installed" ]]; then
+        missing+=("$package")
+    fi
+done
+if (( ${#missing[@]} )); then
+    sudo apt-get update
+    sudo apt-get install -y "${missing[@]}"
+fi
+
+export PATH="${CARGO_HOME:-$HOME/.cargo}/bin:$PATH"
+if ! command -v rustup >/dev/null 2>&1; then
+    installer="$(mktemp)"
+    trap 'rm -f "$installer"' EXIT
+    curl --proto '=https' --tlsv1.2 -fsS https://sh.rustup.rs -o "$installer"
+    sh "$installer" -y --profile minimal --default-toolchain none
+fi
+
+time rustup toolchain install
+time cargo fetch --locked
