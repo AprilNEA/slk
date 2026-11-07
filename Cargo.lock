@@ -3215,7 +3215,7 @@ dependencies = [
 
 [[package]]
 name = "slk"
-version = "0.0.1"
+version = "0.0.2"
 dependencies = [
  "apple-native-keyring-store",
  "axum",

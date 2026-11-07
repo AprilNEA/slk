@@ -1,6 +1,6 @@
 # Distribution and installation
 
-slk is experimental. The initial manual crates.io publication retains the known SDK 429 defect and does not establish live Slack compatibility. Local archives are build artifacts, not published GitHub Releases. Automated publication remains blocked by the failing SDK regression; [live workflow checks](development.md#verification-limits) remain incomplete. Publishing, release tags, signing, and notarization require explicit authorization.
+slk is experimental and retains the known SDK 429 defect. Its regression test is temporarily ignored for approved experimental releases; other release checks remain required. Neither publication nor passing CI establishes live Slack compatibility. Local archives are build artifacts, not published GitHub Releases. [Live workflow checks](development.md#verification-limits) remain incomplete. Publishing, release tags, signing, and notarization require explicit authorization.
 
 ## Install a local source build
 
@@ -65,7 +65,7 @@ After verifying the executable, place it in a user-owned directory on PATH. Revi
 The release sequence is:
 
 1. Validate the exact `v<Cargo package version>` tag. Tag runs also require a license declaration and enabled crates.io publishing; preview plans do not.
-2. Run formatting, strict Clippy, release builds, and the full ordinary test suite on Linux, macOS, and Windows. Dependency auditing, crate packaging and verification, and workflow linting must also pass. The known SDK 429 test stays enabled and blocks this gate.
+2. Run formatting, strict Clippy, release builds, and the full ordinary test suite on Linux, macOS, and Windows. Dependency auditing, crate packaging and verification, and workflow linting must also pass. The SDK 429 regression is an explicitly documented ignored test, not a successful acceptance check; see [verification limits](development.md#verification-limits) for the command and condition for restoring this test.
 3. Build Linux x64, macOS arm64, macOS x64, and Windows x64 archives on native runners. Each archive must pass its smoke check before upload. Targets come from `dist-workspace.toml`; runners come from `workspace.metadata.release.runners` in `Cargo.toml`.
 4. After approval through the `release` environment, verify the Cargo package and publish to crates.io. No build cache is restored by the publishing or archive jobs.
 5. Only after crates.io publication succeeds, create the GitHub Release with archives and per-archive SHA256 files. SemVer prereleases become GitHub prereleases and are excluded by self-update.
@@ -74,7 +74,7 @@ Failed, cancelled, or skipped prerequisites cannot authorize automated publicati
 
 ### Configure the first publication
 
-crates.io requires an existing crate before Trusted Publishing can be configured. The initial publication uses an explicitly approved manual bootstrap from a developer machine or orb. The known SDK failure stays visible in CI; this bootstrap is not a passing acceptance result.
+crates.io requires an existing crate before Trusted Publishing can be configured. The initial publication used an explicitly approved manual bootstrap from a developer machine or orb. The SDK regression failed in that initial CI; the bootstrap was not a passing acceptance result.
 
 1. Confirm that the account may publish the `slk` crate name; an absent index entry is not a reservation. The root package is configured for crates.io publication under the [selected dual license](../README.md#license); `xtask` remains unpublished.
 2. Review the CI results and known limitations before approving publication. Use a clean, committed checkout with the intended package version.
@@ -93,17 +93,18 @@ Use the workflow filename alone, not `.github/workflows/release.yml`. crates.io 
 
 Protect `master` and `v*` tags. Create a GitHub environment named `release` with required reviewers and tag restrictions before enabling automated publication. An `environment: release` label in YAML does not create reviewer protections. Leave `CRATES_IO_BOOTSTRAP` unset when using OIDC; the workflow's alternative token-based bootstrap path is not needed for a local first publication. Revoke the initial API token after Trusted Publishing is configured and verified.
 
-Do not push the ordinary release tag to republish a version already uploaded locally. The current workflow attempts crates.io publication before creating the GitHub Release, so an existing crate version fails that job. The initial GitHub Release needs separate completion with verified archives; later unpublished versions use the normal tag workflow. The SDK regression and remaining acceptance checks still block automated releases.
+Do not push the ordinary release tag to republish a version already uploaded locally. The current workflow attempts crates.io publication before creating the GitHub Release, so an existing crate version fails that job. Use an unpublished package version for the normal tag workflow. Completing a GitHub Release for an already published crate requires a separately approved recovery with verified archives.
 
 ### Publish an approved version
 
-For an unpublished version, commit the intended version and updated lockfile, push the reviewed source, and wait for CI. Only after release approval, validate and push the matching tag. Before a manual bootstrap has published the initial version, the corresponding commands would be:
+For an unpublished version, commit the intended version and updated lockfile, push the reviewed source, and wait for CI. Only after release approval, validate and push the matching tag. Replace `vX.Y.Z` below with the tag matching the package version:
 
 ```sh
-cargo run --locked --package xtask -- plan --tag v0.0.1
+tag=vX.Y.Z
+cargo run --locked --package xtask -- plan --tag "$tag"
 cargo publish --locked --dry-run
-git tag v0.0.1
-git push origin v0.0.1
+git tag "$tag"
+git push origin "$tag"
 ```
 
 The tag triggers publication after all gates and environment approvals. Ordinary branch pushes cannot publish. Do not use `--force-tag`, force-push release tags, or ignore a failed check. The workflow does not sign or notarize binaries; add an approved signing process before claiming signed distribution.

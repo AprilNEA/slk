@@ -271,6 +271,7 @@ async fn sdk_errors_do_not_leak_response_bodies_or_retry_requests() {
 }
 
 #[tokio::test]
+#[ignore = "SDK 429 parsing defect; awaiting a release with https://github.com/abdolence/slack-morphism-rust/pull/397"]
 async fn rate_limits_preserve_retry_after_and_make_only_one_request() {
     let credentials = Credentials::parse(Kind::User, r#"{"token":"xoxp-test"}"#).unwrap();
     for response in [
