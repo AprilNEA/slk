@@ -6,7 +6,7 @@ Read and search Slack, work with messages, users, files, channels, schedules, an
 
 **Experimental.** Releases retain a known HTTP 429 parsing defect in `slack-morphism`.
 
-The affected responses lose their rate-limit classification and `Retry-After`; the regression test is temporarily ignored while awaiting a corrected SDK release. Passing CI does not establish that this defect is fixed or that live Slack workflows work. Browser login and browser search are experimental. See [verification limits](docs/development.md#verification-limits) and [release setup](docs/distribution.md#release-workflows).
+The affected responses lose their rate-limit classification and `Retry-After`; the regression test is temporarily ignored while awaiting a corrected SDK release. Passing CI does not establish that this defect is fixed or that live Slack workflows work. Browser login and browser search are experimental. See [verification limits](docs/development.md#verification-limits) and the [OIDC-only release workflow](docs/distribution.md#release-workflows).
 
 ## Install
 

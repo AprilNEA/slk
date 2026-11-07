@@ -72,15 +72,11 @@ The release sequence is:
 
 Failed, cancelled, or skipped prerequisites cannot authorize automated publication. Only the crates.io job has `id-token: write`; only the GitHub Release job has `contents: write`. Checkouts do not persist credentials, reusable CI inherits no secrets, and tag and target values enter shell commands through quoted environment variables. `CI_TIMEOUT_MINUTES` is an optional repository variable overriding the default 60-minute timeout per job.
 
-### Configure the first publication
+### Configure Trusted Publishing
 
-crates.io requires an existing crate before Trusted Publishing can be configured. The initial publication used an explicitly approved manual bootstrap from a developer machine or orb. The SDK regression failed in that initial CI; the bootstrap was not a passing acceptance result.
+Releases use crates.io Trusted Publishing exclusively. The workflow obtains a short-lived token from `rust-lang/crates-io-auth-action` and passes the token to Cargo as `CARGO_REGISTRY_TOKEN`. An OIDC authentication failure stops publication; no long-lived token fallback is available.
 
-1. Confirm that the account may publish the `slk` crate name; an absent index entry is not a reservation. The root package is configured for crates.io publication under the [selected dual license](../README.md#license); `xtask` remains unpublished.
-2. Review the CI results and known limitations before approving publication. Use a clean, committed checkout with the intended package version.
-3. Supply an expiring API token through the secret environment variable `CARGO_REGISTRY_TOKEN`. Grant only the token permissions needed for the initial publication. Never put a token in repository files, ordinary variables, command arguments, or chat.
-4. Run `cargo publish --locked --package slk --dry-run`, then run `cargo publish --locked --package slk` only with explicit publication approval. Cargo compiles the packaged source but does not run the test suite. Verify the published version before repeating a command whose outcome is uncertain.
-5. After the first publication succeeds, register a crates.io trusted publisher with the values below. Later releases obtain a short-lived OIDC token; an OIDC error never falls back to an API token.
+Maintain the trusted publisher for the existing `slk` crate with these values:
 
 | crates.io trusted-publisher field | Value |
 | --- | --- |
@@ -91,7 +87,7 @@ crates.io requires an existing crate before Trusted Publishing can be configured
 
 Use the workflow filename alone, not `.github/workflows/release.yml`. crates.io matches the originating workflow's `workflow_ref`; a reusable workflow's filename is not a substitute. See the [trusted-publishing documentation](https://crates.io/docs/trusted-publishing).
 
-Protect `master` and `v*` tags. Create a GitHub environment named `release` with required reviewers and tag restrictions before enabling automated publication. An `environment: release` label in YAML does not create reviewer protections. Leave `CRATES_IO_BOOTSTRAP` unset when using OIDC; the workflow's alternative token-based bootstrap path is not needed for a local first publication. Revoke the initial API token after Trusted Publishing is configured and verified.
+Protect `master` and `v*` tags. Configure the GitHub `release` environment with required reviewers and tag restrictions. An `environment: release` label in YAML does not create reviewer protections. Do not store a long-lived crates.io token in GitHub Actions secrets. After Trusted Publishing is verified, revoke the initial-publication API token and remove the stored secret; removing a workflow path does not revoke credentials.
 
 Do not push the ordinary release tag to republish a version already uploaded locally. The current workflow attempts crates.io publication before creating the GitHub Release, so an existing crate version fails that job. Use an unpublished package version for the normal tag workflow. Completing a GitHub Release for an already published crate requires a separately approved recovery with verified archives.
 
