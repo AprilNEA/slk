@@ -1,9 +1,8 @@
-use super::auth::AuthCommand;
-use super::{Cli, Command};
+use super::Cli;
 use crate::auth::valid_profile_name;
 use crate::error::Error;
 use crate::output::Output;
-use clap::{ColorChoice, CommandFactory, Parser};
+use clap::{ColorChoice, CommandFactory};
 use rmcp::{
     ErrorData, RoleServer, ServerHandler, ServiceExt,
     handler::server::wrapper::Parameters,
@@ -15,6 +14,9 @@ use rmcp::{
 use serde::Deserialize;
 use std::future::Future;
 use std::sync::Arc;
+
+mod request;
+use request::Request;
 
 pub(super) async fn run(cli: Cli) -> crate::error::Result<()> {
     let name = cli
@@ -114,24 +116,11 @@ where
         context: RequestContext<RoleServer>,
     ) -> CallToolResult {
         let result = async {
-            let mut cli = Cli::try_parse_from(std::iter::once("slk".to_owned()).chain(input.args))
-                .map_err(|_| Error::Arguments("Invalid command arguments. Use slk_help; never supply credentials in tool arguments."))?;
-            if cli.profile.is_some() || cli.source.configured() {
-                return Err(Error::Arguments("MCP tools cannot select or override a profile. Configure a separate server for another identity."));
-            }
-            if !read_only(&cli.command) {
-                return Err(Error::Arguments("MCP accepts read-only commands. Writes, previews, file transfers, authentication changes, and nested servers are unavailable."));
-            }
-            cli.profile = Some(self.profile.clone());
-            cli.json = true;
-            let output = tokio::select! {
-                biased;
-                () = context.ct.cancelled() => return Err(Error::Cancelled),
-                result = (self.execute)(cli) => result?,
-            };
-            serde_json::to_value(output)
-                .map_err(|error| Error::io("serialize the MCP result", std::io::Error::other(error)))
-        }.await;
+            Request::read(&self.profile, input.args)?
+                .execute(&self.execute, context)
+                .await
+        }
+        .await;
         match result {
             Ok(value) => CallToolResult::structured(value),
             Err(error) => CallToolResult::structured_error(serde_json::json!(error.report())),
@@ -148,62 +137,6 @@ where
     F: Fn(Cli) -> T + Send + Sync + 'static,
     T: Future<Output = crate::error::Result<Output>> + Send + 'static,
 {
-}
-
-fn read_only(command: &Command) -> bool {
-    use super::canvas::CanvasCommand;
-    use super::compat::Selector;
-    use super::conversations::{ChannelCommand, ConversationCommand, GroupCommand};
-    use super::files::FileCommand;
-    use super::messages::MessageCommand;
-    use super::scheduled::ScheduledCommand;
-    use super::users::UserCommand;
-
-    match command {
-        Command::Mcp | Command::Update(_) => false,
-        Command::Compatibility(command) => command.read_only(),
-        Command::Auth { command } => matches!(
-            command,
-            AuthCommand::Status {
-                selector: Selector { workspace: None }
-            }
-        ),
-        Command::Messages(command) => matches!(
-            command.as_ref(),
-            MessageCommand::Channels(_)
-                | MessageCommand::Search {
-                    selector: Selector { workspace: None },
-                    ..
-                }
-                | MessageCommand::Read { .. }
-                | MessageCommand::Get { .. }
-                | MessageCommand::Thread { .. }
-                | MessageCommand::Pins { .. }
-        ),
-        Command::Users(command) => matches!(
-            command,
-            UserCommand::Users {
-                selector: Selector { workspace: None },
-                ..
-            } | UserCommand::Resolve { .. }
-        ),
-        Command::Conversations(command) => match command {
-            ConversationCommand::Channel { command } => matches!(
-                command,
-                ChannelCommand::Info { .. } | ChannelCommand::Members { .. }
-            ),
-            ConversationCommand::GroupDm { command } => matches!(command, GroupCommand::List(_)),
-            ConversationCommand::Unread(_) | ConversationCommand::Workspace => true,
-        },
-        Command::Files { command, selector } => {
-            selector.workspace.is_none() && matches!(command, FileCommand::Info { .. })
-        }
-        Command::Schedule { command } => matches!(command, ScheduledCommand::List { .. }),
-        Command::Canvas { command } => matches!(
-            command,
-            CanvasCommand::Read { .. } | CanvasCommand::Sections { .. }
-        ),
-    }
 }
 
 #[cfg(test)]

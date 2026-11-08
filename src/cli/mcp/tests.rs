@@ -1,5 +1,6 @@
-use super::{Cli, Command, Server};
+use super::{Cli, Server};
 use crate::auth::{Credentials, Kind, Store};
+use crate::cli::Command;
 use crate::error::Error;
 use crate::slack::tests::{auth_response, client};
 use rmcp::{ServiceExt, model::CallToolRequestParams};
