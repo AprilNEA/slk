@@ -116,7 +116,7 @@ Alternatively, supply the same JSON directly to stdin with `--session-stdin`. Do
 
 Each data command verifies the declared identity through `auth.test`; injected identity metadata does not grant authority. Write approval is unchanged: non-interactive or JSON writes need `--profile` and `--yes`. `auth list` shows only the injected session. Login, logout, browser acquisition, OAuth, and refresh reject in-memory sessions instead of persisting or changing credentials. Supply a fresh session explicitly when credentials change.
 
-Session stdin cannot also supply a message body, blocks, compatibility `--message-file -`, login JSON, or MCP transport. Use environment injection for [stdio MCP](mcp.md), or when the body must come from stdin. MCP captures the injected session at startup; restart the server to replace it.
+Session stdin cannot also supply a message body, blocks, compatibility `--message-file -`, login JSON, or MCP transport. Use environment injection for [MCP](mcp.md), including HTTP mode, or when the body must come from stdin. MCP captures the injected session at startup; restart the server to replace it. For write-enabled remote MCP, keep Slack credentials on the isolated service host and the separate MCP bearer token in the client's protected remote definition, never in an agent-accessible environment.
 
 ## Profiles and storage
 

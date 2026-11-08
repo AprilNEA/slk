@@ -67,4 +67,4 @@ Upstream `messages schedule`, `messages list-scheduled`, and `messages delete-sc
 
 Names such as `conversations info`, `conversations replies`, `messages update`, `messages reactions`, and `messages pin` are not commands in the pinned upstream version and are not invented as aliases. Native `channel info`, `thread`, `edit`, `react`, and `pin` remain available. Native `users lookup` and `files upload` are slk commands, not upstream compatibility claims.
 
-Read-only MCP accepts the supported conversation/read aliases without selectors. It rejects compatibility writes and every tool-level `--workspace`, even when the selector names the server's bound profile.
+MCP's `slk_read` accepts the supported conversation/read aliases without selectors and rejects compatibility writes. On an explicitly write-enabled HTTP server, `slk_write` accepts supported compatibility writes under the same mandatory host approval as native commands. `--message-file` names an input in the tool's base64 `files` map, never a server path or stdin. Both tools reject every tool-level `--workspace`, even when the selector names the server's bound profile. See [MCP boundaries](mcp.md).

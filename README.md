@@ -2,7 +2,7 @@
 
 A personal Slack CLI for developers, scripts, and coding agents, written in Rust.
 
-Read and search Slack, work with messages, users, files, channels, schedules, and Canvas documents, or expose read-only tools to a local MCP client. Writes require approval. Persistent credentials stay in the system keyring; headless sessions use explicit in-memory injection. slk does not cache messages or install a background service.
+Read and search Slack, work with messages, users, files, channels, schedules, and Canvas documents, or expose MCP tools over read-only stdio or authenticated HTTP. Writes require approval. Persistent credentials stay in the system keyring; headless sessions use explicit in-memory injection. slk does not cache messages or install a background service.
 
 **Experimental.** Releases retain a known HTTP 429 parsing defect in `slack-morphism`.
 
@@ -35,7 +35,7 @@ Replace the conversation ID with one from your workspace. Login reads credential
 
 `--dry-run` makes no write request. Actual non-interactive or JSON writes require both `--profile` and `--yes`. Reads return one page by default; `--all --max-pages 5` opts into bounded pagination. Requests never retry automatically. When a write has an unknown outcome, check Slack before repeating it.
 
-Run `slk mcp --profile work` for read-only stdio tools bound to one identity. MCP does not expose writes, file transfers, authentication changes, or an HTTP endpoint. See [MCP setup and data-use boundaries](docs/mcp.md).
+Run `slk mcp --profile work` for read-only stdio tools bound to one identity. Remote MCP adds authenticated HTTP and optional writes/file transfers. Mandatory Amp dialogs require a stored remote MCP definition and credentials isolated from the agent; a Skill URL alone is insufficient. See [MCP setup and data-use boundaries](docs/mcp.md). HTTP support requires a build from this checkout until a release includes it.
 
 Command references: [messages](docs/messages.md), [users](docs/users.md), [conversations](docs/conversations.md), [files](docs/files.md), [Canvas](docs/canvas.md), and the [slackcli compatibility subset](docs/compatibility.md). See [development](docs/development.md) for module ownership, checks, and acceptance limits.
 

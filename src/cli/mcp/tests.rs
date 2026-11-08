@@ -9,6 +9,82 @@ use std::sync::Arc;
 use wiremock::matchers::{method, path, query_param};
 use wiremock::{Mock, MockServer, ResponseTemplate};
 
+mod files;
+mod http;
+mod writes;
+
+fn slack_server(api: &MockServer) -> impl rmcp::ServerHandler + Clone {
+    let store = Store::memory(
+        "work",
+        &json!({
+            "kind": "user",
+            "identity": {"workspace_url": "https://team.slack.com/", "team_id": "T12345678", "user_id": "W87654321"},
+            "credentials": {"token": "xoxp-test"},
+            "settings": {"files": {"max_bytes": 8}}
+        })
+        .to_string(),
+    )
+    .unwrap();
+    let credentials = store.credentials("work").unwrap();
+    let context = Arc::new((store, client(api), credentials));
+    Server::new(
+        "work".into(),
+        move |cli: Cli| {
+            let context = Arc::clone(&context);
+            async move {
+                let (store, slack, credentials) = context.as_ref();
+                let profile = cli.profile.as_deref();
+                match cli.command {
+                    Command::Messages(command) => {
+                        command
+                            .prepare(store, profile, cli.json)?
+                            .execute(slack, credentials)
+                            .await
+                    }
+                    Command::Compatibility(command) => {
+                        command
+                            .prepare(store, profile, cli.json)?
+                            .execute(slack, credentials)
+                            .await
+                    }
+                    Command::Users(command) => {
+                        command
+                            .prepare(store, profile, cli.json)?
+                            .execute(slack, credentials)
+                            .await
+                    }
+                    Command::Conversations(command) => {
+                        command
+                            .prepare(store, profile, cli.json)?
+                            .execute(slack, credentials)
+                            .await
+                    }
+                    Command::Files { command, .. } => {
+                        command
+                            .prepare(store, profile, cli.json)?
+                            .execute(slack, credentials)
+                            .await
+                    }
+                    Command::Schedule { command } => {
+                        command
+                            .prepare(store, profile, cli.json)?
+                            .execute(slack, credentials)
+                            .await
+                    }
+                    Command::Canvas { command } => {
+                        command
+                            .prepare(store, profile, cli.json)?
+                            .execute(slack, credentials)
+                            .await
+                    }
+                    _ => panic!("unexpected management command"),
+                }
+            }
+        },
+        true,
+    )
+}
+
 #[tokio::test]
 async fn mcp_reads_preserve_json_pagination_and_errors_without_retries() {
     let api = MockServer::start().await;
@@ -62,9 +138,9 @@ async fn mcp_reads_preserve_json_pagination_and_errors_without_retries() {
         client(&api),
         Credentials::parse(Kind::User, r#"{"token":"xoxp-test"}"#).unwrap(),
     ));
-    let server = Server {
-        profile: "work".into(),
-        execute: move |cli: Cli| {
+    let server = Server::new(
+        "work".into(),
+        move |cli: Cli| {
             let context = Arc::clone(&context);
             async move {
                 let (store, slack, credentials) = context.as_ref();
@@ -77,7 +153,8 @@ async fn mcp_reads_preserve_json_pagination_and_errors_without_retries() {
                     .await
             }
         },
-    };
+        false,
+    );
     let (server_io, client_io) = tokio::io::duplex(8192);
     let server_task = tokio::spawn(async move {
         server
@@ -149,10 +226,11 @@ async fn mcp_reads_preserve_json_pagination_and_errors_without_retries() {
 
 #[tokio::test]
 async fn mcp_rejects_writes_local_io_and_profile_overrides_before_execution() {
-    let server = Server {
-        profile: "work".into(),
-        execute: |_| async { Err(Error::CredentialMissing) },
-    };
+    let server = Server::new(
+        "work".into(),
+        |_| async { Err(Error::CredentialMissing) },
+        false,
+    );
     let (server_io, client_io) = tokio::io::duplex(8192);
     let server_task = tokio::spawn(async move {
         server

@@ -53,6 +53,8 @@ workspace = true
 
 [dependencies]
 axum = { version = "0.8.9", default-features = false, features = ["http1", "query", "tokio"] }
+axum-extra = { version = "0.12.6", default-features = false, features = ["typed-header"] }
+base64 = "0.23.1"
 bytes = "1.12.1"
 chromiumoxide = "0.9.1"
 chrono = { version = "0.4.45", default-features = false, features = ["clock", "serde"] }
@@ -65,9 +67,10 @@ mime = "0.3.18"
 multer = "3.1.0"
 oauth2 = { version = "5.0.0", default-features = false, features = ["timing-resistant-secret-traits"] }
 reqwest.workspace = true
-rmcp = { version = "3.9.0", default-features = false, features = ["server", "macros", "transport-io"] }
+rmcp = { version = "3.9.0", default-features = false, features = ["server", "macros", "transport-io", "transport-streamable-http-server"] }
 rpassword = "7.5.4"
 rustls = { version = "0.23.46", default-features = false, features = ["ring", "std", "tls12"] }
+sanitize-filename = "0.6.0"
 secrecy = { version = "0.10.3", features = ["serde"] }
 self_update.workspace = true
 semver = "1.0.28"
@@ -88,11 +91,11 @@ webbrowser = "1.2.6"
 zeroize = "1.9.1"
 
 [dev-dependencies]
-base64 = "0.23.1"
 hyper-util = { version = "0.1.21", features = ["client-legacy", "http1"] }
 rcgen = { version = "0.14.10", default-features = false, features = ["crypto", "ring", "pem"] }
-rmcp = { version = "3.9.0", default-features = false, features = ["client", "transport-child-process"] }
+rmcp = { version = "3.9.0", default-features = false, features = ["client", "transport-child-process", "transport-streamable-http-client-reqwest"] }
 tokio-rustls = { version = "0.26.6", default-features = false, features = ["ring", "tls12"] }
+tokio-util = { version = "0.7.20", default-features = false, features = ["rt"] }
 wiremock = "0.6.5"
 
 [target.'cfg(target_os = "linux")'.dependencies]

@@ -189,7 +189,7 @@ pub(super) struct Body {
     message: Option<String>,
     /// UTF-8 body file, or - for stdin. This is not slackcli's attachment --file option.
     #[arg(long, value_name = "PATH")]
-    message_file: Option<PathBuf>,
+    pub(super) message_file: Option<PathBuf>,
     #[command(flatten)]
     options: WriteOptions,
 }
@@ -214,16 +214,6 @@ pub(super) enum Prepared {
 }
 
 impl Command {
-    pub(super) fn read_only(&self) -> bool {
-        matches!(
-            self,
-            Self::Conversations {
-                selector: Selector { workspace: None },
-                ..
-            }
-        )
-    }
-
     pub(super) fn prepare(
         self,
         store: &Store,

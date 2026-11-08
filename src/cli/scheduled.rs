@@ -55,7 +55,7 @@ pub(super) struct TimedInput {
     #[arg(long, value_name = "RFC3339")]
     at: DateTime<FixedOffset>,
     #[command(flatten)]
-    input: WriteInput,
+    pub(super) input: WriteInput,
 }
 
 enum Request {

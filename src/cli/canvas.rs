@@ -66,7 +66,7 @@ pub(super) struct EditInput {
     #[arg(value_parser = parse_canvas)]
     canvas_id: SlackCanvasId,
     #[command(flatten)]
-    body: BodyInput,
+    pub(super) body: BodyInput,
     #[command(flatten)]
     options: WriteOptions,
 }
@@ -74,7 +74,7 @@ pub(super) struct EditInput {
 #[derive(Args)]
 pub(super) struct SectionInput {
     #[command(flatten)]
-    input: EditInput,
+    pub(super) input: EditInput,
     #[arg(value_parser = parse_section)]
     section_id: SlackCanvasSectionId,
 }

@@ -126,7 +126,7 @@ pub(crate) enum Error {
     Http { status: u16 },
     #[error("Could not complete the Slack connection. No request was retried.")]
     Transport,
-    #[error("The MCP stdio session failed. Restart the MCP client connection.")]
+    #[error("The MCP connection failed. Reconnect without automatically replaying writes.")]
     Mcp,
     #[error(
         "Self-update failed: {0}. No request was retried. If replacement began, verify the installation before running slk again."

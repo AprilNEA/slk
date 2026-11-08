@@ -41,8 +41,8 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Command {
-    /// Serve read-only MCP tools over stdio, bound to one explicit profile.
-    Mcp,
+    /// Serve fixed-profile MCP tools over stdio or authenticated HTTP.
+    Mcp(mcp::Options),
     /// Check or install a verified stable release from this project's GitHub repository.
     Update(update::UpdateCommand),
     /// Log in, import, inspect, verify, or remove local credentials.
@@ -133,7 +133,7 @@ pub async fn run() -> ExitCode {
         .and_then(|matches| {
             let cli = Cli::from_arg_matches(&matches)?;
             if cli.source.session_stdin
-                && (matches!(cli.command, Command::Mcp) || session::claims_stdin(&matches))
+                && (matches!(cli.command, Command::Mcp(_)) || session::claims_stdin(&matches))
             {
                 return Err(clap::Error::raw(
                     ErrorKind::ArgumentConflict,
@@ -165,7 +165,7 @@ pub async fn run() -> ExitCode {
         }
     };
     let json = cli.json;
-    if matches!(cli.command, Command::Mcp) {
+    if matches!(cli.command, Command::Mcp(_)) {
         return match mcp::run(cli).await {
             Ok(()) => ExitCode::SUCCESS,
             Err(error) => fail(error, json),
@@ -194,7 +194,7 @@ async fn execute(cli: Cli) -> Result<Output> {
 
 async fn execute_with_store(cli: Cli, store: &mut Store) -> Result<Output> {
     let command = match cli.command {
-        Command::Mcp => return Err(Error::Arguments("Nested MCP servers are not supported.")),
+        Command::Mcp(_) => return Err(Error::Arguments("Nested MCP servers are not supported.")),
         Command::Update(command) => return command.execute(store.settings(), cli.json).await,
         Command::Auth { command } => command,
         Command::Compatibility(command) => {
