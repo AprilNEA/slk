@@ -193,10 +193,14 @@ async fn execute(cli: Cli) -> Result<Output> {
 }
 
 async fn execute_with_store(cli: Cli, store: &mut Store) -> Result<Output> {
-    let command = match cli.command {
+    let (profile, request) = match cli.command {
         Command::Mcp(_) => return Err(Error::Arguments("Nested MCP servers are not supported.")),
         Command::Update(command) => return command.execute(store.settings(), cli.json).await,
-        Command::Auth { command } => command,
+        Command::Auth { command } => {
+            return command
+                .execute(store, cli.profile, &cli.source, cli.json)
+                .await;
+        }
         Command::Compatibility(command) => {
             let (profile, prepared) = command.prepare(store, cli.profile.as_deref(), cli.json)?;
             let connection = Connection::open(store, profile).await?;
@@ -228,13 +232,8 @@ async fn execute_with_store(cli: Cli, store: &mut Store) -> Result<Output> {
             let connection = Connection::open(store, profile).await?;
             return prepared.execute(connection, &write::Terminal).await;
         }
-        Command::Canvas { command } => {
-            let (profile, prepared) = command.prepare(store, cli.profile.as_deref(), cli.json)?;
-            let connection = Connection::open(store, profile).await?;
-            return prepared.execute(connection, &write::Terminal).await;
-        }
+        Command::Canvas { command } => command.prepare(store, cli.profile.as_deref(), cli.json)?,
     };
-    command
-        .execute(store, cli.profile, &cli.source, cli.json)
-        .await
+    let connection = Connection::open(store, profile).await?;
+    request.execute(connection, &write::Terminal).await
 }

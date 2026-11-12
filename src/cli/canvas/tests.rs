@@ -1,10 +1,8 @@
-use super::Prepared;
-use crate::app::Connection;
+use crate::app::Request;
 use crate::auth::{Credentials, Kind, ProfileView};
-use crate::cli::{Cli, Command, write::Terminal};
+use crate::cli::{Cli, Command};
 use crate::error::{Error, Result};
-use crate::output::Output;
-use crate::testing::{self, auth_response, client};
+use crate::testing::{self, auth_response, execute};
 use clap::Parser;
 use serde_json::json;
 use std::fs;
@@ -12,7 +10,7 @@ use std::time::Duration;
 use wiremock::matchers::{body_json, method, path};
 use wiremock::{Mock, MockServer, ResponseTemplate};
 
-fn prepare(args: &[&str]) -> Result<(ProfileView, Prepared)> {
+fn prepare(args: &[&str]) -> Result<(ProfileView, Request)> {
     let (_directory, store) = testing::store(&["work"], Kind::User, json!({}));
     let cli = Cli::try_parse_from(["slk", "canvas"].into_iter().chain(args.iter().copied()))
         .map_err(|_| Error::Arguments("Invalid test command."))?;
@@ -20,15 +18,6 @@ fn prepare(args: &[&str]) -> Result<(ProfileView, Prepared)> {
         panic!("expected canvas command")
     };
     command.prepare(&store, cli.profile.as_deref(), cli.json)
-}
-
-async fn execute(
-    (profile, prepared): (ProfileView, Prepared),
-    server: &MockServer,
-    credentials: &Credentials,
-) -> Result<Output> {
-    let connection = Connection::verify(client(server), credentials.clone(), profile).await?;
-    prepared.execute(connection, &Terminal).await
 }
 
 async fn identity(server: &MockServer) {

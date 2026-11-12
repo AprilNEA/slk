@@ -1,8 +1,8 @@
 use super::Slack;
 use crate::auth::Credentials;
 use crate::error::Result;
-use clap::ValueEnum;
-use serde::{Deserialize, Serialize};
+use crate::model::canvas::ContentType;
+use serde::Deserialize;
 use serde_json::json;
 use slack_morphism::api::{
     SlackApiCanvasesEditRequest, SlackApiCanvasesEditResponse,
@@ -10,13 +10,6 @@ use slack_morphism::api::{
     SlackCanvasSection,
 };
 use slack_morphism::{SlackCanvasId, SlackClientHttpConnector};
-
-#[derive(Clone, Copy, Debug, Serialize, ValueEnum)]
-#[serde(rename_all = "snake_case")]
-pub(crate) enum ContentType {
-    Markdown,
-    Html,
-}
 
 #[derive(Deserialize)]
 struct ContentResponse {

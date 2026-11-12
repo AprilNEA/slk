@@ -1,19 +1,15 @@
 use super::write::{BodyInput, WriteOptions};
-use crate::app::{Approval, Connection, Prompt};
+use crate::app::{self, canvas::Request};
 use crate::auth::{ProfileView, Store};
-use crate::error::{Error, Result};
+use crate::error::Result;
 use crate::ids::{parse_canvas, parse_section};
-use crate::output::{Output, canvas as output};
-use crate::slack::ContentType;
+use crate::model::canvas::{ContentType, markdown_edit, section_deletion};
 use clap::{ArgGroup, Args, Subcommand, builder::NonEmptyStringValueParser};
 use slack_morphism::api::{
-    SlackApiCanvasesEditRequest, SlackApiCanvasesSectionsLookupRequest, SlackCanvasChange,
-    SlackCanvasDocumentContent, SlackCanvasOperation, SlackCanvasSectionType,
+    SlackApiCanvasesSectionsLookupRequest, SlackCanvasOperation, SlackCanvasSectionType,
     SlackCanvasSectionsLookupCriteria,
 };
-use slack_morphism::{SlackCanvasId, SlackCanvasSectionId, SlackClientHttpConnector};
-
-const MAX_MARKDOWN_BYTES: usize = 1_048_576;
+use slack_morphism::{SlackCanvasId, SlackCanvasSectionId};
 
 #[derive(Subcommand)]
 pub(super) enum CanvasCommand {
@@ -80,43 +76,19 @@ pub(super) struct SectionInput {
     section_id: SlackCanvasSectionId,
 }
 
-enum Request {
-    Read {
-        canvas_id: SlackCanvasId,
-        content_type: ContentType,
-    },
-    Sections(SlackApiCanvasesSectionsLookupRequest),
-    Edit {
-        request: SlackApiCanvasesEditRequest,
-        approval: Approval,
-    },
-}
-
-pub(super) struct Prepared {
-    request: Request,
-}
-
 impl CanvasCommand {
     pub(super) fn prepare(
         self,
         store: &Store,
         selected: Option<&str>,
         json: bool,
-    ) -> Result<(ProfileView, Prepared)> {
+    ) -> Result<(ProfileView, app::Request)> {
         let profile = store.select(selected)?;
         let edit = |input: EditInput, operation, section_id| -> Result<Request> {
             let approval = input.options.prepare(selected.is_some(), json)?;
             let markdown = input.body.read()?;
-            if markdown.trim().is_empty() || markdown.len() > MAX_MARKDOWN_BYTES {
-                return Err(Error::Arguments(
-                    "Canvas Markdown must be nonempty and at most 1 MiB of UTF-8. Content is never split or truncated.",
-                ));
-            }
-            let change = SlackCanvasChange::new(operation)
-                .opt_section_id(section_id)
-                .with_document_content(SlackCanvasDocumentContent::new(markdown));
             Ok(Request::Edit {
-                request: SlackApiCanvasesEditRequest::new(input.canvas_id, vec![change]),
+                request: markdown_edit(input.canvas_id, operation, section_id, markdown)?,
                 approval,
             })
         };
@@ -159,67 +131,11 @@ impl CanvasCommand {
                 section_id,
                 options,
             } => Request::Edit {
-                request: SlackApiCanvasesEditRequest::new(
-                    canvas_id,
-                    vec![
-                        SlackCanvasChange::new(SlackCanvasOperation::Delete)
-                            .with_section_id(section_id),
-                    ],
-                ),
+                request: section_deletion(canvas_id, section_id),
                 approval: options.prepare(selected.is_some(), json)?,
             },
         };
-        Ok((profile, Prepared { request }))
-    }
-}
-
-impl Prepared {
-    pub(super) async fn execute<C: SlackClientHttpConnector + Send + Sync>(
-        self,
-        connection: Connection<C>,
-        prompt: &dyn Prompt,
-    ) -> Result<Output> {
-        let Connection {
-            slack,
-            credentials,
-            profile,
-        } = connection;
-        let credentials = &credentials;
-        let result = match self.request {
-            Request::Read {
-                canvas_id,
-                content_type,
-            } => output::Output::Content {
-                content: slack
-                    .canvas_content(credentials, &canvas_id, content_type)
-                    .await?,
-                canvas_id,
-                content_type,
-            },
-            Request::Sections(request) => output::Output::Sections {
-                sections: slack.canvas_sections(credentials, &request).await?,
-                canvas_id: request.canvas_id,
-            },
-            Request::Edit { request, approval } => {
-                let before = slack
-                    .canvas_content(credentials, &request.canvas_id, ContentType::Markdown)
-                    .await?;
-                if !approval.confirm(prompt, "Apply this canvas edit?", || {
-                    output::preview(&profile, &before, &request)
-                })? {
-                    output::Output::Preview {
-                        dry_run: true,
-                        profile: Box::new(profile),
-                        before,
-                        request,
-                    }
-                } else {
-                    slack.edit_canvas(credentials, &request).await?;
-                    output::Output::Edited { request }
-                }
-            }
-        };
-        Ok(Output::Canvas(result))
+        Ok((profile, app::Request::Canvas(request)))
     }
 }
 

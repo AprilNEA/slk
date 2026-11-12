@@ -10,6 +10,7 @@ mod error;
 mod files;
 mod ids;
 mod messages;
+mod model;
 mod output;
 mod platform;
 mod scheduled;

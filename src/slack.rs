@@ -24,7 +24,6 @@ mod scheduled;
 mod search;
 mod users;
 
-pub(crate) use canvas::ContentType;
 pub(crate) use conversations::{
     Channel, ChannelDetails, ConversationAction, OpenedGroup, ThreadRequest,
 };

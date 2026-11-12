@@ -1,6 +1,9 @@
 //! Fixtures shared by the crate's unit tests.
 
-use crate::auth::{Kind, Store};
+use crate::app::{Connection, Prompt, Request};
+use crate::auth::{Credentials, Kind, ProfileView, Store};
+use crate::error::Result;
+use crate::output::Output;
 use crate::slack::Slack;
 use hyper_util::client::legacy::connect::HttpConnector;
 use serde_json::{Map, Value, json};
@@ -59,4 +62,23 @@ pub(crate) fn store(names: &[&str], kind: Kind, settings: Value) -> (TempDir, St
     .unwrap();
     let store = Store::load(directory.path().to_owned()).unwrap();
     (directory, store)
+}
+
+/// Fails a test that reaches the confirmation prompt: tests choose `--yes` or `--dry-run`.
+struct Unasked;
+
+impl Prompt for Unasked {
+    fn confirm(&self, _question: &str, _preview: &str) -> Result<bool> {
+        panic!("a unit test must not reach the confirmation prompt")
+    }
+}
+
+/// Runs a prepared request against `server` after verifying `credentials` against the profile.
+pub(crate) async fn execute(
+    (profile, request): (ProfileView, Request),
+    server: &MockServer,
+    credentials: &Credentials,
+) -> Result<Output> {
+    let connection = Connection::verify(client(server), credentials.clone(), profile).await?;
+    request.execute(connection, &Unasked).await
 }

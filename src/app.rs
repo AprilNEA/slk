@@ -2,11 +2,34 @@
 
 use crate::auth::{Credentials, ProfileView, Store};
 use crate::error::{Error, Result};
+use crate::output::Output;
 use crate::platform::{Native, Platform};
 use crate::slack::Slack;
 use slack_morphism::SlackClientHttpConnector;
 use slack_morphism::hyper_tokio::SlackClientHyperHttpsConnector;
 use std::future::Future;
+
+pub(crate) mod canvas;
+
+/// One validated operation on Slack, ready to run on a [`Connection`].
+pub(crate) enum Request {
+    Canvas(canvas::Request),
+}
+
+impl Request {
+    pub(crate) async fn execute<C: SlackClientHttpConnector + Send + Sync>(
+        self,
+        connection: Connection<C>,
+        prompt: &dyn Prompt,
+    ) -> Result<Output> {
+        match self {
+            Self::Canvas(request) => request
+                .execute(connection, prompt)
+                .await
+                .map(Output::Canvas),
+        }
+    }
+}
 
 /// A Slack client whose credentials are verified to belong to the selected profile.
 pub(crate) struct Connection<C: SlackClientHttpConnector + Send> {

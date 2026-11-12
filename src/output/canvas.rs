@@ -1,6 +1,6 @@
 use super::{identity_text, terminal_text};
 use crate::auth::ProfileView;
-use crate::slack::ContentType;
+use crate::model::canvas::ContentType;
 use serde::Serialize;
 use slack_morphism::SlackCanvasId;
 use slack_morphism::api::{SlackApiCanvasesEditRequest, SlackCanvasSection};
