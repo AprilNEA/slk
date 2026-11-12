@@ -1,4 +1,5 @@
 use super::{Cli, Command};
+use crate::app::Connection;
 use crate::auth::valid_profile_name;
 use crate::error::{self, Error};
 use crate::output::Output;
@@ -65,7 +66,7 @@ pub(super) async fn run(cli: Cli) -> error::Result<()> {
                 if current.kind != profile.kind || current.identity != profile.identity {
                     return Err(Error::ProfileConflict);
                 }
-                super::execute_with_store(cli, &mut store).await
+                super::dispatch(cli, &mut store, Connection::open).await
             }
         },
         options.allow_writes,

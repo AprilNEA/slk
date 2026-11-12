@@ -1,7 +1,7 @@
 use super::{Cli, Server};
 use crate::app::Connection;
 use crate::auth::{Credentials, Kind, Store};
-use crate::cli::{Command, write::Terminal};
+use crate::cli::dispatch;
 use crate::error::Error;
 use crate::testing::{self, auth_response, client_at};
 use rmcp::{ServiceExt, model::CallToolRequestParams};
@@ -34,41 +34,10 @@ fn slack_server(api: &MockServer) -> impl rmcp::ServerHandler + Clone {
             let context = Arc::clone(&context);
             async move {
                 let (store, uri, credentials) = context.as_ref();
-                let selected = cli.profile.as_deref();
-                let connect = async |profile| {
+                dispatch(cli, &mut store.clone(), async |_: &Store, profile| {
                     Connection::verify(client_at(uri), credentials.clone(), profile).await
-                };
-                match cli.command {
-                    Command::Messages(command) => {
-                        let (profile, request) = command.prepare(store, selected, cli.json)?;
-                        request.execute(connect(profile).await?, &Terminal).await
-                    }
-                    Command::Compatibility(command) => {
-                        let (profile, request) = command.prepare(store, selected, cli.json)?;
-                        request.execute(connect(profile).await?, &Terminal).await
-                    }
-                    Command::Users(command) => {
-                        let (profile, request) = command.prepare(store, selected, cli.json)?;
-                        request.execute(connect(profile).await?, &Terminal).await
-                    }
-                    Command::Conversations(command) => {
-                        let (profile, request) = command.prepare(store, selected, cli.json)?;
-                        request.execute(connect(profile).await?, &Terminal).await
-                    }
-                    Command::Files { command, .. } => {
-                        let (profile, request) = command.prepare(store, selected, cli.json)?;
-                        request.execute(connect(profile).await?, &Terminal).await
-                    }
-                    Command::Schedule { command } => {
-                        let (profile, request) = command.prepare(store, selected, cli.json)?;
-                        request.execute(connect(profile).await?, &Terminal).await
-                    }
-                    Command::Canvas { command } => {
-                        let (profile, request) = command.prepare(store, selected, cli.json)?;
-                        request.execute(connect(profile).await?, &Terminal).await
-                    }
-                    _ => panic!("unexpected management command"),
-                }
+                })
+                .await
             }
         },
         true,
@@ -121,14 +90,10 @@ async fn mcp_reads_preserve_json_pagination_and_errors_without_retries() {
             let context = Arc::clone(&context);
             async move {
                 let (store, uri, credentials) = context.as_ref();
-                let Command::Messages(command) = cli.command else {
-                    panic!("expected a message read");
-                };
-                let (profile, request) =
-                    command.prepare(store, cli.profile.as_deref(), cli.json)?;
-                let connection =
-                    Connection::verify(client_at(uri), credentials.clone(), profile).await?;
-                request.execute(connection, &Terminal).await
+                dispatch(cli, &mut store.clone(), async |_: &Store, profile| {
+                    Connection::verify(client_at(uri), credentials.clone(), profile).await
+                })
+                .await
             }
         },
         false,

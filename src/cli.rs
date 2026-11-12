@@ -1,9 +1,10 @@
 use crate::app::Connection;
-use crate::auth::{Settings, Store};
+use crate::auth::{ProfileView, Settings, Store};
 use crate::error::{Error, Result};
 use crate::model::pagination::{CursorPage, MAX_PAGE_SIZE};
 use crate::output::{self, Output};
 use clap::{Args, CommandFactory, FromArgMatches, Parser, Subcommand, error::ErrorKind};
+use slack_morphism::SlackClientHttpConnector;
 use std::ffi::OsString;
 use std::io;
 use std::process::ExitCode;
@@ -189,10 +190,15 @@ fn fail(error: Error, json: bool) -> ExitCode {
 
 async fn execute(cli: Cli) -> Result<Output> {
     let mut store = cli.source.load(cli.profile.as_deref())?;
-    execute_with_store(cli, &mut store).await
+    dispatch(cli, &mut store, Connection::open).await
 }
 
-async fn execute_with_store(cli: Cli, store: &mut Store) -> Result<Output> {
+/// Runs one command. `connect` opens the verified connection of a command that calls Slack.
+async fn dispatch<C: SlackClientHttpConnector + Send + Sync>(
+    cli: Cli,
+    store: &mut Store,
+    connect: impl AsyncFnOnce(&Store, ProfileView) -> Result<Connection<C>>,
+) -> Result<Output> {
     let (profile, request) = match cli.command {
         Command::Mcp(_) => return Err(Error::Arguments("Nested MCP servers are not supported.")),
         Command::Update(command) => return command.execute(store.settings(), cli.json).await,
@@ -218,6 +224,6 @@ async fn execute_with_store(cli: Cli, store: &mut Store) -> Result<Output> {
         }
         Command::Canvas { command } => command.prepare(store, cli.profile.as_deref(), cli.json)?,
     };
-    let connection = Connection::open(store, profile).await?;
+    let connection = connect(store, profile).await?;
     request.execute(connection, &write::Terminal).await
 }
