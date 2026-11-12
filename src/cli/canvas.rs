@@ -1,4 +1,5 @@
 use super::write::{BodyInput, WriteOptions};
+use super::{Effect, FilePath};
 use crate::app::{self, canvas::Request};
 use crate::auth::{ProfileView, Store};
 use crate::error::Result;
@@ -63,7 +64,7 @@ pub(super) struct EditInput {
     #[arg(value_parser = parse_canvas)]
     canvas_id: SlackCanvasId,
     #[command(flatten)]
-    pub(super) body: BodyInput,
+    body: BodyInput,
     #[command(flatten)]
     options: WriteOptions,
 }
@@ -71,12 +72,34 @@ pub(super) struct EditInput {
 #[derive(Args)]
 pub(super) struct SectionInput {
     #[command(flatten)]
-    pub(super) input: EditInput,
+    input: EditInput,
     #[arg(value_parser = parse_section)]
     section_id: SlackCanvasSectionId,
 }
 
 impl CanvasCommand {
+    pub(super) fn effect(&self) -> Effect {
+        match self {
+            Self::Read { .. } | Self::Sections { .. } => Effect::Read,
+            Self::Append(_)
+            | Self::Prepend(_)
+            | Self::InsertBefore(_)
+            | Self::InsertAfter(_)
+            | Self::ReplaceSection(_)
+            | Self::DeleteSection { .. } => Effect::Write,
+        }
+    }
+
+    pub(super) fn file_paths(&mut self) -> Vec<FilePath<'_>> {
+        match self {
+            Self::Append(input) | Self::Prepend(input) => input.body.file_paths(),
+            Self::InsertBefore(input) | Self::InsertAfter(input) | Self::ReplaceSection(input) => {
+                input.input.body.file_paths()
+            }
+            Self::Read { .. } | Self::Sections { .. } | Self::DeleteSection { .. } => Vec::new(),
+        }
+    }
+
     pub(super) fn prepare(
         self,
         store: &Store,

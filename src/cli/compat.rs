@@ -1,13 +1,13 @@
-use super::Paging;
 use super::conversations::{ChannelCommand, ConversationCommand};
 use super::messages::{MessageCommand, Target};
 use super::write::{BodyInput, SendInput, WriteInput, WriteOptions};
+use super::{Effect, FilePath, Paging};
 use crate::app::{self, messages::Order};
 use crate::auth::{ProfileView, Store};
 use crate::error::{Error, Result};
 use crate::ids::{parse_channel, parse_timestamp};
 use crate::model::messages::{MessageLink, parse_reaction};
-use clap::{ArgGroup, Args, Subcommand};
+use clap::{ArgGroup, ArgMatches, Args, Subcommand};
 use slack_morphism::{SlackChannelId, SlackReactionName, SlackTs};
 use std::path::PathBuf;
 
@@ -19,6 +19,11 @@ pub(super) struct Selector {
 }
 
 impl Selector {
+    /// Whether `matches`, the innermost subcommand's matches, carry `--workspace`.
+    pub(super) fn given(matches: &ArgMatches) -> bool {
+        matches.try_contains_id("workspace").unwrap_or(false)
+    }
+
     pub(super) fn resolve(&self, store: &Store, selected: Option<&str>) -> Result<Option<String>> {
         let Some(selector) = &self.workspace else {
             return Ok(selected.map(str::to_owned));
@@ -189,7 +194,7 @@ pub(super) struct Body {
     message: Option<String>,
     /// UTF-8 body file, or - for stdin. This is not slackcli's attachment --file option.
     #[arg(long, value_name = "PATH")]
-    pub(super) message_file: Option<PathBuf>,
+    message_file: Option<PathBuf>,
     #[command(flatten)]
     options: WriteOptions,
 }
@@ -208,6 +213,47 @@ impl From<Body> for WriteInput {
 }
 
 impl Command {
+    pub(super) fn effect(&self) -> Effect {
+        match self {
+            Self::Conversations { command, .. } => match command {
+                Conversation::List(_) | Conversation::Read { .. } | Conversation::Get { .. } => {
+                    Effect::Read
+                }
+                Conversation::Members { command } => match command {
+                    Members::List { .. } => Effect::Read,
+                },
+            },
+            Self::Messages { command, .. } => match command {
+                Message::Send { .. }
+                | Message::Edit { .. }
+                | Message::Delete { .. }
+                | Message::React { .. }
+                | Message::Unreact { .. } => Effect::Write,
+            },
+        }
+    }
+
+    pub(super) fn file_paths(&mut self) -> Vec<FilePath<'_>> {
+        match self {
+            Self::Conversations { command, .. } => match command {
+                Conversation::List(_) | Conversation::Read { .. } | Conversation::Get { .. } => {
+                    Vec::new()
+                }
+                Conversation::Members { command } => match command {
+                    Members::List { .. } => Vec::new(),
+                },
+            },
+            Self::Messages { command, .. } => match command {
+                Message::Send { body, .. } | Message::Edit { body, .. } => {
+                    body.message_file.iter_mut().map(FilePath::Body).collect()
+                }
+                Message::Delete { .. } | Message::React { .. } | Message::Unreact { .. } => {
+                    Vec::new()
+                }
+            },
+        }
+    }
+
     pub(super) fn prepare(
         self,
         store: &Store,

@@ -1,8 +1,9 @@
+use super::FilePath;
 use crate::app::{Approval, Prompt};
 use crate::auth::Settings;
 use crate::error::{Error, Result};
 use crate::model::messages::{Content, MAX_TEXT_CHARS, MessageText, Split};
-use clap::{ArgGroup, Args};
+use clap::{ArgGroup, ArgMatches, Args};
 use std::fs;
 use std::io::{self, IsTerminal, Read, Write};
 use std::path::{Path, PathBuf};
@@ -55,6 +56,11 @@ pub(super) struct WriteOptions {
 }
 
 impl WriteOptions {
+    /// Whether `matches`, the innermost subcommand's matches, set `--dry-run`.
+    pub(super) fn previews(matches: &ArgMatches) -> bool {
+        matches.try_get_one::<bool>("dry_run").ok().flatten() == Some(&true)
+    }
+
     pub(super) fn prepare(self, explicit_profile: bool, json: bool) -> Result<Approval> {
         let interactive = io::stdin().is_terminal() && io::stderr().is_terminal();
         if self.dry_run {
@@ -72,6 +78,15 @@ impl WriteOptions {
 }
 
 impl WriteInput {
+    pub(super) fn file_paths(&mut self) -> Vec<FilePath<'_>> {
+        self.body
+            .file
+            .iter_mut()
+            .chain(&mut self.blocks_file)
+            .map(FilePath::Body)
+            .collect()
+    }
+
     pub(super) fn prepare(self, explicit_profile: bool, json: bool) -> Result<(Content, Approval)> {
         let approval = self.options.prepare(explicit_profile, json)?;
         if self.blocks_file.as_deref() == Some(Path::new("-"))
@@ -125,6 +140,10 @@ impl SendInput {
 }
 
 impl BodyInput {
+    pub(super) fn file_paths(&mut self) -> Vec<FilePath<'_>> {
+        self.file.iter_mut().map(FilePath::Body).collect()
+    }
+
     pub(super) fn read(self) -> Result<String> {
         let text = match (self.text, self.file) {
             (Some(text), None) => text,

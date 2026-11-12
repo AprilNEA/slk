@@ -1,4 +1,5 @@
 use super::write::WriteOptions;
+use super::{Effect, FilePath};
 use crate::app::{self, files::Request};
 use crate::auth::{ProfileView, Store};
 use crate::error::{Error, Result};
@@ -33,6 +34,22 @@ pub(super) enum FileCommand {
 }
 
 impl FileCommand {
+    pub(super) fn effect(&self) -> Effect {
+        match self {
+            Self::Info { .. } => Effect::Read,
+            Self::Upload { .. } => Effect::Write,
+            Self::Download { .. } => Effect::Download,
+        }
+    }
+
+    pub(super) fn file_paths(&mut self) -> Vec<FilePath<'_>> {
+        match self {
+            Self::Info { .. } => Vec::new(),
+            Self::Upload { path, .. } => vec![FilePath::Upload(path)],
+            Self::Download { output, .. } => vec![FilePath::Download(output)],
+        }
+    }
+
     pub(super) fn prepare(
         self,
         store: &Store,

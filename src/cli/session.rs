@@ -1,7 +1,7 @@
 use crate::APP_ID;
 use crate::auth::{Store, valid_profile_name};
 use crate::error::{Error, Result};
-use clap::{ArgMatches, Args};
+use clap::Args;
 use directories::ProjectDirs;
 use std::io::{self, Read};
 use std::path::PathBuf;
@@ -61,18 +61,4 @@ impl SessionSource {
             Store::load(directory)
         }
     }
-}
-
-pub(super) fn claims_stdin(matches: &ArgMatches) -> bool {
-    matches.try_get_one::<bool>("stdin").ok().flatten() == Some(&true)
-        || ["file", "blocks_file", "message_file"].iter().any(|id| {
-            matches
-                .try_get_raw(id)
-                .ok()
-                .flatten()
-                .is_some_and(|mut values| values.any(|value| value == "-"))
-        })
-        || matches
-            .subcommand()
-            .is_some_and(|(_, child)| claims_stdin(child))
 }

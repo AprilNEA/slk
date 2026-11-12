@@ -1,4 +1,4 @@
-use super::{compat, session::SessionSource};
+use super::{Effect, FilePath, compat, session::SessionSource};
 use crate::app::{Connection, cancellation};
 use crate::auth::{Credentials, Kind, Realm, Store, Workspace, browser, oauth};
 use crate::error::{Error, Result};
@@ -64,6 +64,30 @@ pub(super) enum AuthCommand {
 }
 
 impl AuthCommand {
+    pub(super) fn effect(&self) -> Effect {
+        match self {
+            Self::Status { .. } => Effect::Read,
+            Self::Oauth { .. }
+            | Self::Refresh
+            | Self::Browser { .. }
+            | Self::Login { .. }
+            | Self::List
+            | Self::Logout => Effect::CliOnly,
+        }
+    }
+
+    pub(super) fn file_paths(&mut self) -> Vec<FilePath<'_>> {
+        match self {
+            Self::Oauth { .. }
+            | Self::Refresh
+            | Self::Browser { .. }
+            | Self::Login { .. }
+            | Self::List
+            | Self::Status { .. }
+            | Self::Logout => Vec::new(),
+        }
+    }
+
     pub(super) async fn execute(
         self,
         store: &mut Store,

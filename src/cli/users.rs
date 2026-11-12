@@ -1,5 +1,5 @@
-use super::Paging;
 use super::write::WriteOptions;
+use super::{Effect, FilePath, Paging};
 use crate::app::{self, conversations, users::Request};
 use crate::auth::{ProfileView, Store};
 use crate::error::{Error, Result};
@@ -54,6 +54,29 @@ pub(super) enum ResolveKind {
 }
 
 impl UserCommand {
+    pub(super) fn effect(&self) -> Effect {
+        match self {
+            Self::Users { command, .. } => match command {
+                UserQuery::List(_) | UserQuery::Info { .. } | UserQuery::Lookup { .. } => {
+                    Effect::Read
+                }
+            },
+            Self::Resolve { .. } => Effect::Read,
+            Self::Dm { .. } => Effect::Write,
+        }
+    }
+
+    pub(super) fn file_paths(&mut self) -> Vec<FilePath<'_>> {
+        match self {
+            Self::Users { command, .. } => match command {
+                UserQuery::List(_) | UserQuery::Info { .. } | UserQuery::Lookup { .. } => {
+                    Vec::new()
+                }
+            },
+            Self::Resolve { .. } | Self::Dm { .. } => Vec::new(),
+        }
+    }
+
     pub(super) fn prepare(
         self,
         store: &Store,

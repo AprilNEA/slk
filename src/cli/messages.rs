@@ -1,5 +1,5 @@
 use super::write::{SendInput, WriteInput, WriteOptions};
-use super::{Paging, Traversal};
+use super::{Effect, FilePath, Paging, Traversal};
 use crate::app::{
     self,
     messages::{Destination, Order, Request},
@@ -145,6 +145,41 @@ impl Target {
 }
 
 impl MessageCommand {
+    pub(super) fn effect(&self) -> Effect {
+        match self {
+            Self::Search { .. }
+            | Self::Read { .. }
+            | Self::Get { .. }
+            | Self::Thread { .. }
+            | Self::Pins { .. } => Effect::Read,
+            Self::Send { .. }
+            | Self::Reply { .. }
+            | Self::Edit { .. }
+            | Self::Delete { .. }
+            | Self::React { .. }
+            | Self::Unreact { .. }
+            | Self::Pin { .. }
+            | Self::Unpin { .. } => Effect::Write,
+        }
+    }
+
+    pub(super) fn file_paths(&mut self) -> Vec<FilePath<'_>> {
+        match self {
+            Self::Send { input, .. } | Self::Reply { input, .. } => input.input.file_paths(),
+            Self::Edit { input, .. } => input.file_paths(),
+            Self::Search { .. }
+            | Self::Read { .. }
+            | Self::Get { .. }
+            | Self::Thread { .. }
+            | Self::Delete { .. }
+            | Self::React { .. }
+            | Self::Unreact { .. }
+            | Self::Pins { .. }
+            | Self::Pin { .. }
+            | Self::Unpin { .. } => Vec::new(),
+        }
+    }
+
     pub(super) fn prepare(
         self,
         store: &Store,

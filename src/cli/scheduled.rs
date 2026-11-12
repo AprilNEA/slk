@@ -1,5 +1,5 @@
 use super::{
-    Paging,
+    Effect, FilePath, Paging,
     messages::Target,
     write::{WriteInput, WriteOptions},
 };
@@ -54,10 +54,24 @@ pub(super) struct TimedInput {
     #[arg(long, value_name = "RFC3339")]
     at: DateTime<FixedOffset>,
     #[command(flatten)]
-    pub(super) input: WriteInput,
+    input: WriteInput,
 }
 
 impl ScheduledCommand {
+    pub(super) fn effect(&self) -> Effect {
+        match self {
+            Self::List { .. } => Effect::Read,
+            Self::Create { .. } | Self::Reply { .. } | Self::Cancel { .. } => Effect::Write,
+        }
+    }
+
+    pub(super) fn file_paths(&mut self) -> Vec<FilePath<'_>> {
+        match self {
+            Self::Create { input, .. } | Self::Reply { input, .. } => input.input.file_paths(),
+            Self::List { .. } | Self::Cancel { .. } => Vec::new(),
+        }
+    }
+
     pub(super) fn prepare(
         self,
         store: &Store,

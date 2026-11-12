@@ -1,4 +1,4 @@
-use super::{Paging, write::WriteOptions};
+use super::{Effect, FilePath, Paging, write::WriteOptions};
 use crate::app::{self, conversations::Request};
 use crate::auth::{ProfileView, Store};
 use crate::error::Result;
@@ -104,6 +104,49 @@ pub(super) enum GroupCommand {
 }
 
 impl ConversationCommand {
+    pub(super) fn effect(&self) -> Effect {
+        match self {
+            Self::Channels(_) | Self::Unread(_) | Self::Workspace => Effect::Read,
+            Self::Channel { command } => match command {
+                ChannelCommand::Info { .. } | ChannelCommand::Members { .. } => Effect::Read,
+                ChannelCommand::Create { .. }
+                | ChannelCommand::Join(_)
+                | ChannelCommand::Leave(_)
+                | ChannelCommand::Archive(_)
+                | ChannelCommand::Topic { .. }
+                | ChannelCommand::Mark { .. } => Effect::Write,
+            },
+            Self::GroupDm { command } => match command {
+                GroupCommand::List(_) => Effect::Read,
+                GroupCommand::Open { .. } | GroupCommand::Resume(_) | GroupCommand::Close(_) => {
+                    Effect::Write
+                }
+            },
+        }
+    }
+
+    pub(super) fn file_paths(&mut self) -> Vec<FilePath<'_>> {
+        match self {
+            Self::Channels(_) | Self::Unread(_) | Self::Workspace => Vec::new(),
+            Self::Channel { command } => match command {
+                ChannelCommand::Info { .. }
+                | ChannelCommand::Members { .. }
+                | ChannelCommand::Create { .. }
+                | ChannelCommand::Join(_)
+                | ChannelCommand::Leave(_)
+                | ChannelCommand::Archive(_)
+                | ChannelCommand::Topic { .. }
+                | ChannelCommand::Mark { .. } => Vec::new(),
+            },
+            Self::GroupDm { command } => match command {
+                GroupCommand::List(_)
+                | GroupCommand::Open { .. }
+                | GroupCommand::Resume(_)
+                | GroupCommand::Close(_) => Vec::new(),
+            },
+        }
+    }
+
     pub(super) fn prepare(
         self,
         store: &Store,

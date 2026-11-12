@@ -7,6 +7,7 @@ use clap::{Args, CommandFactory, FromArgMatches, Parser, Subcommand, error::Erro
 use slack_morphism::SlackClientHttpConnector;
 use std::ffi::OsString;
 use std::io;
+use std::path::PathBuf;
 use std::process::ExitCode;
 
 mod auth;
@@ -78,6 +79,72 @@ enum Command {
     },
 }
 
+/// What a command does to Slack and the local machine. MCP admits commands by their effect.
+enum Effect {
+    /// Reads Slack or local profile state.
+    Read,
+    /// Changes Slack state, or previews that change with `--dry-run`.
+    Write,
+    /// Writes a Slack-hosted file to a local path.
+    Download,
+    /// Manages credentials, the executable, or a server; no MCP tool accepts the command.
+    CliOnly,
+}
+
+/// A local file path argument of a command.
+enum FilePath<'a> {
+    /// Body text or Block Kit JSON to read; `-` reads stdin.
+    Body(&'a mut PathBuf),
+    /// The file that `files upload` reads.
+    Upload(&'a mut PathBuf),
+    /// The file that `files download` creates.
+    Download(&'a mut PathBuf),
+}
+
+impl Command {
+    fn effect(&self) -> Effect {
+        match self {
+            Self::Mcp(_) | Self::Update(_) => Effect::CliOnly,
+            Self::Auth { command } => command.effect(),
+            Self::Compatibility(command) => command.effect(),
+            Self::Messages(command) => command.effect(),
+            Self::Users(command) => command.effect(),
+            Self::Conversations(command) => command.effect(),
+            Self::Files { command, .. } => command.effect(),
+            Self::Schedule { command } => command.effect(),
+            Self::Canvas { command } => command.effect(),
+        }
+    }
+
+    fn file_paths(&mut self) -> Vec<FilePath<'_>> {
+        match self {
+            Self::Mcp(_) | Self::Update(_) => Vec::new(),
+            Self::Auth { command } => command.file_paths(),
+            Self::Compatibility(command) => command.file_paths(),
+            Self::Messages(command) => command.file_paths(),
+            Self::Users(command) => command.file_paths(),
+            Self::Conversations(command) => command.file_paths(),
+            Self::Files { command, .. } => command.file_paths(),
+            Self::Schedule { command } => command.file_paths(),
+            Self::Canvas { command } => command.file_paths(),
+        }
+    }
+
+    /// Whether the command reads stdin itself, which a session on stdin would also consume.
+    fn claims_stdin(&mut self) -> bool {
+        matches!(
+            self,
+            Self::Mcp(_)
+                | Self::Auth {
+                    command: auth::AuthCommand::Login { stdin: true, .. }
+                }
+        ) || self
+            .file_paths()
+            .iter()
+            .any(|path| matches!(path, FilePath::Body(path) if path.as_os_str() == "-"))
+    }
+}
+
 #[derive(Args)]
 struct Paging {
     /// Maximum results per page; defaults to settings.page_size, capped at the API limit.
@@ -132,10 +199,8 @@ pub async fn run() -> ExitCode {
     let cli = match Cli::command()
         .try_get_matches_from(args)
         .and_then(|matches| {
-            let cli = Cli::from_arg_matches(&matches)?;
-            if cli.source.session_stdin
-                && (matches!(cli.command, Command::Mcp(_)) || session::claims_stdin(&matches))
-            {
+            let mut cli = Cli::from_arg_matches(&matches)?;
+            if cli.source.session_stdin && cli.command.claims_stdin() {
                 return Err(clap::Error::raw(
                     ErrorKind::ArgumentConflict,
                     "Session stdin is already in use.",
