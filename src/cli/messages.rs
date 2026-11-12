@@ -24,7 +24,7 @@ pub(super) enum MessageCommand {
         #[arg(value_name = "SLACKCLI_QUERY")]
         compatibility_query: Option<String>,
         #[command(flatten)]
-        selector: super::compat::Selector,
+        selector: super::store::Selector,
         /// Maximum results per page; capped at the RTS maximum.
         #[arg(long, value_parser = clap::value_parser!(u16).range(1..=i64::from(MAX_SEARCH_SIZE)))]
         limit: Option<u16>,

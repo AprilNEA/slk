@@ -12,7 +12,7 @@ pub(super) enum UserCommand {
     /// List or inspect users visible to the selected identity.
     Users {
         #[command(flatten)]
-        selector: super::compat::Selector,
+        selector: super::store::Selector,
         #[command(subcommand)]
         command: UserQuery,
     },

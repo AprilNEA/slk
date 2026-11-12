@@ -1,4 +1,5 @@
-use super::{Effect, FilePath, compat, session::SessionSource};
+use super::store::{Selector, SessionSource};
+use super::{Effect, FilePath};
 use crate::app::{Connection, cancellation};
 use crate::auth::{Credentials, Kind, Realm, Store, Workspace, browser, oauth};
 use crate::error::{Error, Result};
@@ -57,7 +58,7 @@ pub(super) enum AuthCommand {
     #[command(visible_alias = "whoami")]
     Status {
         #[command(flatten)]
-        selector: compat::Selector,
+        selector: Selector,
     },
     /// Delete local credentials; this does not revoke the Slack session.
     Logout,

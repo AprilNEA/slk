@@ -1,7 +1,7 @@
 use crate::APP_ID;
 use crate::auth::{Store, valid_profile_name};
 use crate::error::{Error, Result};
-use clap::Args;
+use clap::{ArgMatches, Args};
 use directories::ProjectDirs;
 use std::io::{self, Read};
 use std::path::PathBuf;
@@ -59,6 +59,42 @@ impl SessionSource {
                     .to_path_buf(),
             };
             Store::load(directory)
+        }
+    }
+}
+
+#[derive(Args)]
+pub(super) struct Selector {
+    /// slackcli selector: an exact profile name or a unique saved workspace ID.
+    #[arg(long, global = true, conflicts_with = "profile")]
+    workspace: Option<String>,
+}
+
+impl Selector {
+    /// Whether `matches`, the innermost subcommand's matches, carry `--workspace`.
+    pub(super) fn given(matches: &ArgMatches) -> bool {
+        matches.try_contains_id("workspace").unwrap_or(false)
+    }
+
+    pub(super) fn resolve(&self, store: &Store, selected: Option<&str>) -> Result<Option<String>> {
+        let Some(selector) = &self.workspace else {
+            return Ok(selected.map(str::to_owned));
+        };
+        if selected.is_some() {
+            return Err(Error::Arguments("Use --profile or --workspace, not both."));
+        }
+        let profiles = store.profiles();
+        if let Some(profile) = profiles.iter().find(|profile| profile.profile == *selector) {
+            return Ok(Some(profile.profile.clone()));
+        }
+        let matches = profiles
+            .into_iter()
+            .filter(|profile| profile.identity.team_id == *selector)
+            .collect::<Vec<_>>();
+        match matches.as_slice() {
+            [profile] => Ok(Some(profile.profile.clone())),
+            [] => Err(Error::ProfileNotFound),
+            _ => Err(Error::AmbiguousProfile),
         }
     }
 }

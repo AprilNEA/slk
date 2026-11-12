@@ -20,8 +20,8 @@ fn store() -> Store {
 
 fn prepare(args: &[&str], store: &Store) -> Result<(ProfileView, Request)> {
     let cli = Cli::try_parse_from(std::iter::once("slk").chain(args.iter().copied())).unwrap();
-    let Command::Compatibility(command) = cli.command else {
-        panic!("expected a compatibility command");
+    let Command::Slackcli(command) = cli.command else {
+        panic!("expected a slackcli command");
     };
     command.prepare(store, cli.profile.as_deref(), cli.json)
 }

@@ -1,4 +1,4 @@
-use crate::cli::compat::Selector;
+use crate::cli::store::Selector;
 use crate::cli::write::WriteOptions;
 use crate::cli::{Cli, Effect, FilePath};
 use crate::error::{Error, Result};

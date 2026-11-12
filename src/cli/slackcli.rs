@@ -1,5 +1,6 @@
 use super::conversations::{ChannelCommand, ConversationCommand};
 use super::messages::{MessageCommand, Target};
+use super::store::Selector;
 use super::write::{BodyInput, SendInput, WriteInput, WriteOptions};
 use super::{Effect, FilePath, Paging};
 use crate::app::{self, messages::Order};
@@ -7,45 +8,9 @@ use crate::auth::{ProfileView, Store};
 use crate::error::{Error, Result};
 use crate::ids::{parse_channel, parse_timestamp};
 use crate::model::messages::{MessageLink, parse_reaction};
-use clap::{ArgGroup, ArgMatches, Args, Subcommand};
+use clap::{ArgGroup, Args, Subcommand};
 use slack_morphism::{SlackChannelId, SlackReactionName, SlackTs};
 use std::path::PathBuf;
-
-#[derive(Args)]
-pub(super) struct Selector {
-    /// slackcli selector: an exact profile name or a unique saved workspace ID.
-    #[arg(long, global = true, conflicts_with = "profile")]
-    pub(super) workspace: Option<String>,
-}
-
-impl Selector {
-    /// Whether `matches`, the innermost subcommand's matches, carry `--workspace`.
-    pub(super) fn given(matches: &ArgMatches) -> bool {
-        matches.try_contains_id("workspace").unwrap_or(false)
-    }
-
-    pub(super) fn resolve(&self, store: &Store, selected: Option<&str>) -> Result<Option<String>> {
-        let Some(selector) = &self.workspace else {
-            return Ok(selected.map(str::to_owned));
-        };
-        if selected.is_some() {
-            return Err(Error::Arguments("Use --profile or --workspace, not both."));
-        }
-        let profiles = store.profiles();
-        if let Some(profile) = profiles.iter().find(|profile| profile.profile == *selector) {
-            return Ok(Some(profile.profile.clone()));
-        }
-        let matches = profiles
-            .into_iter()
-            .filter(|profile| profile.identity.team_id == *selector)
-            .collect::<Vec<_>>();
-        match matches.as_slice() {
-            [profile] => Ok(Some(profile.profile.clone())),
-            [] => Err(Error::ProfileNotFound),
-            _ => Err(Error::AmbiguousProfile),
-        }
-    }
-}
 
 #[derive(Subcommand)]
 pub(super) enum Command {

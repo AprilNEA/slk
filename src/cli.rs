@@ -12,13 +12,13 @@ use std::process::ExitCode;
 
 mod auth;
 mod canvas;
-mod compat;
 mod conversations;
 mod files;
 mod mcp;
 mod messages;
 mod scheduled;
-mod session;
+mod slackcli;
+mod store;
 mod update;
 mod users;
 mod write;
@@ -36,7 +36,7 @@ struct Cli {
     #[arg(long, global = true)]
     json: bool,
     #[command(flatten)]
-    source: session::SessionSource,
+    source: store::SessionSource,
     #[command(subcommand)]
     command: Command,
 }
@@ -53,7 +53,7 @@ enum Command {
         command: auth::AuthCommand,
     },
     #[command(flatten)]
-    Compatibility(compat::Command),
+    Slackcli(slackcli::Command),
     #[command(flatten)]
     Messages(Box<messages::MessageCommand>),
     #[command(flatten)]
@@ -63,7 +63,7 @@ enum Command {
     /// Inspect, upload, or explicitly download one file.
     Files {
         #[command(flatten)]
-        selector: compat::Selector,
+        selector: store::Selector,
         #[command(subcommand)]
         command: files::FileCommand,
     },
@@ -106,7 +106,7 @@ impl Command {
         match self {
             Self::Mcp(_) | Self::Update(_) => Effect::CliOnly,
             Self::Auth { command } => command.effect(),
-            Self::Compatibility(command) => command.effect(),
+            Self::Slackcli(command) => command.effect(),
             Self::Messages(command) => command.effect(),
             Self::Users(command) => command.effect(),
             Self::Conversations(command) => command.effect(),
@@ -120,7 +120,7 @@ impl Command {
         match self {
             Self::Mcp(_) | Self::Update(_) => Vec::new(),
             Self::Auth { command } => command.file_paths(),
-            Self::Compatibility(command) => command.file_paths(),
+            Self::Slackcli(command) => command.file_paths(),
             Self::Messages(command) => command.file_paths(),
             Self::Users(command) => command.file_paths(),
             Self::Conversations(command) => command.file_paths(),
@@ -272,9 +272,7 @@ async fn dispatch<C: SlackClientHttpConnector + Send + Sync>(
                 .execute(store, cli.profile, &cli.source, cli.json)
                 .await;
         }
-        Command::Compatibility(command) => {
-            command.prepare(store, cli.profile.as_deref(), cli.json)?
-        }
+        Command::Slackcli(command) => command.prepare(store, cli.profile.as_deref(), cli.json)?,
         Command::Messages(command) => command.prepare(store, cli.profile.as_deref(), cli.json)?,
         Command::Users(command) => command.prepare(store, cli.profile.as_deref(), cli.json)?,
         Command::Conversations(command) => {
