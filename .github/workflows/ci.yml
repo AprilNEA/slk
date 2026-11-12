@@ -30,6 +30,8 @@ jobs:
         run: cargo fmt --all -- --check
       - name: Lint
         run: cargo clippy --workspace --all-targets --locked -- -D warnings
+      - name: Check module layers
+        run: cargo run --locked --package xtask -- layers
       - name: Build
         run: cargo build --workspace --release --locked
       - name: Test

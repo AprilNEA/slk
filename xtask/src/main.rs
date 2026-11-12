@@ -1,4 +1,4 @@
-//! Repository release planning and native archive verification.
+//! Repository release planning, native archive verification, and module layer checks.
 
 use anyhow::{Context, Result, bail, ensure};
 use cargo_dist_schema::{ArtifactKind, AssetKind, DistManifest};
@@ -14,7 +14,7 @@ use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 
 #[derive(Parser)]
-#[command(about = "Repository release checks; run from the repository root")]
+#[command(about = "Repository release and layer checks; run from the repository root")]
 struct Args {
     #[command(subcommand)]
     command: Task,
@@ -33,6 +33,8 @@ enum Task {
         #[arg(long)]
         manifest: PathBuf,
     },
+    /// Check the workspace sources against each package's `[package.metadata.layers]` rules.
+    Layers,
 }
 
 #[derive(Deserialize)]
@@ -51,6 +53,7 @@ fn main() -> Result<()> {
     match Args::parse().command {
         Task::Plan { tag } => plan(&tag),
         Task::Smoke { manifest } => smoke(&manifest),
+        Task::Layers => layers(),
     }
 }
 
@@ -220,5 +223,20 @@ fn smoke(manifest_path: &Path) -> Result<()> {
     }
     eprintln!("Verified {name}: SHA256, packaged assets, version, CLI help, MCP help");
     println!("files<<SLK_DIST_FILES\n{archive_path}\n{checksum_path}\nSLK_DIST_FILES");
+    Ok(())
+}
+
+fn layers() -> Result<()> {
+    let violations =
+        cargo_layers::check(Some(Path::new("Cargo.toml"))).context("Check module layers")?;
+    for violation in &violations {
+        eprintln!("{violation}");
+    }
+    ensure!(
+        violations.is_empty(),
+        "Module layer check found {} violation(s)",
+        violations.len()
+    );
+    eprintln!("Verified module layers");
     Ok(())
 }

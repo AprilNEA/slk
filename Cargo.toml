@@ -14,6 +14,11 @@ include = ["/src/**", "/tests/**", "/docs/**", "/Cargo.toml", "/Cargo.lock", "/R
 [package.metadata.dist]
 dist = true
 
+# Module rules that `cargo layers` checks; docs/development.md describes the layers.
+[package.metadata.layers]
+order = ["cli", "app", ["slack", "output"], "model"]
+restrict = [{ paths = ["clap::Args", "clap::Parser", "clap::Subcommand"], to = ["cli"] }]
+
 [workspace]
 members = [".", "xtask"]
 default-members = ["."]

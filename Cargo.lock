@@ -418,6 +418,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "cargo-layers"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a637dc0aad1405da63e5424ada265e702fe10e9da822e7bdf4e8fd7ca663d465"
+dependencies = [
+ "anyhow",
+ "cargo_metadata",
+ "clap",
+ "proc-macro2",
+ "serde",
+ "serde_json",
+ "syn 3.0.9",
+ "thiserror 2.0.21",
+]
+
+[[package]]
 name = "cargo-platform"
 version = "0.3.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4428,6 +4444,7 @@ version = "0.0.0"
 dependencies = [
  "anyhow",
  "cargo-dist-schema",
+ "cargo-layers",
  "cargo_metadata",
  "clap",
  "hex",
