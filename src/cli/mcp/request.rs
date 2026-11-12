@@ -194,18 +194,21 @@ impl Request {
             }),
             result = execute(cli) => result?,
         };
-        let content = if let Output::Downloaded { path, .. } = &mut output {
-            let content = tokio::fs::read(&path)
-                .await
-                .map_err(|error| Error::io("read the MCP download result", error))?;
-            *path = PathBuf::from(
-                path.file_name()
-                    .expect("MCP downloads use a validated filename"),
-            );
-            Some(BASE64_STANDARD.encode(content))
-        } else {
-            None
-        };
+        let content =
+            if let Output::Files(crate::output::files::Output::Downloaded { path, .. }) =
+                &mut output
+            {
+                let content = tokio::fs::read(&path)
+                    .await
+                    .map_err(|error| Error::io("read the MCP download result", error))?;
+                *path = PathBuf::from(
+                    path.file_name()
+                        .expect("MCP downloads use a validated filename"),
+                );
+                Some(BASE64_STANDARD.encode(content))
+            } else {
+                None
+            };
         let mut value = serde_json::to_value(output)
             .map_err(|error| Error::io("serialize the MCP result", std::io::Error::other(error)))?;
         if let Some(content) = content {

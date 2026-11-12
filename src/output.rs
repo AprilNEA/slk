@@ -1,18 +1,17 @@
 use crate::auth::{Kind, ProfileView};
 use crate::error::{Error, Result};
-use crate::files::File;
 use crate::messages::{Change, Changed, Draft, Message, Sent};
 use crate::scheduled::{Receipt, Scheduled};
 use crate::slack::{Channel, Page, Pagination, Resolution, ResolutionStatus};
 use crate::users::{OpenedDm, User};
 use serde::Serialize;
+use slack_morphism::SlackChannelId;
 use slack_morphism::prelude::ValueStruct;
-use slack_morphism::{SlackChannelId, SlackFileId};
 use std::io::{self, Write};
-use std::path::PathBuf;
 
 pub(crate) mod canvas;
 pub(crate) mod conversations;
+pub(crate) mod files;
 pub(crate) mod messages;
 mod scheduled;
 use messages::{batch_preview_text, change_preview_text, change_text, message_text, preview_text};
@@ -74,24 +73,6 @@ pub(crate) enum Output {
         change: Change,
     },
     Changed(Changed),
-    File(File),
-    UploadPreview {
-        dry_run: bool,
-        #[serde(flatten)]
-        profile: ProfileView,
-        filename: String,
-        size: u64,
-        channel_id: Option<SlackChannelId>,
-    },
-    Uploaded {
-        file: File,
-        channel_id: Option<SlackChannelId>,
-    },
-    Downloaded {
-        file_id: SlackFileId,
-        path: PathBuf,
-        size: u64,
-    },
     Scheduled(Receipt),
     Schedules(Page<Scheduled>),
     SchedulePreview {
@@ -112,6 +93,7 @@ pub(crate) enum Output {
         cancelled: Receipt,
     },
     Conversations(conversations::Output),
+    Files(files::Output),
     Canvas(canvas::Output),
 }
 
@@ -224,35 +206,6 @@ impl Output {
                     terminal_text(result.ts.value()),
                     change_text(&result.change),
                 ),
-                Self::File(file) => file_text(file),
-                Self::UploadPreview {
-                    profile,
-                    filename,
-                    size,
-                    channel_id,
-                    ..
-                } => format!(
-                    "Dry run; no file was uploaded.\n{}",
-                    upload_preview_text(profile, filename, *size, channel_id.as_ref()),
-                ),
-                Self::Uploaded { file, channel_id } => format!(
-                    "Uploaded\t{}\nConversation: {}",
-                    file_text(file),
-                    terminal_text(
-                        channel_id
-                            .as_ref()
-                            .map_or("private (not shared)", |id| id.value())
-                    ),
-                ),
-                Self::Downloaded {
-                    file_id,
-                    path,
-                    size,
-                } => format!(
-                    "Downloaded\t{}\t{size} bytes\n{}",
-                    terminal_text(file_id.value()),
-                    terminal_text(&path.to_string_lossy()),
-                ),
                 Self::Scheduled(receipt) => {
                     format!("Scheduled on Slack\t{}", scheduled::receipt_text(receipt))
                 }
@@ -279,40 +232,12 @@ impl Output {
                     format!("Cancelled schedule\t{}", scheduled::receipt_text(cancelled))
                 }
                 Self::Conversations(result) => result.text(),
+                Self::Files(result) => result.text(),
                 Self::Canvas(result) => result.text(),
             }
         };
         writeln!(writer, "{rendered}").map_err(|error| Error::io("write command output", error))
     }
-}
-
-fn file_text(file: &File) -> String {
-    format!(
-        "{}\t{}\t{} bytes",
-        terminal_text(file.file_id.value()),
-        terminal_text(
-            file.title
-                .as_deref()
-                .or(file.name.as_deref())
-                .unwrap_or("-")
-        ),
-        file.size
-            .map_or_else(|| "unknown".to_owned(), |size| size.to_string()),
-    )
-}
-
-pub(crate) fn upload_preview_text(
-    profile: &ProfileView,
-    name: &str,
-    size: u64,
-    channel: Option<&SlackChannelId>,
-) -> String {
-    format!(
-        "{}\nFile: {}\nSize: {size} bytes\nConversation: {}",
-        identity_text(profile),
-        terminal_text(name),
-        terminal_text(channel.map_or("private (not shared)", |id| id.value())),
-    )
 }
 
 fn channel_text(channel: &Channel) -> String {

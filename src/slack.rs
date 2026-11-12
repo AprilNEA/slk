@@ -16,7 +16,7 @@ use std::time::Duration;
 
 mod canvas;
 mod conversations;
-mod files;
+pub(crate) mod files;
 mod modify;
 mod oauth;
 mod pagination;

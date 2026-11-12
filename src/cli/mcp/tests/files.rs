@@ -1,7 +1,7 @@
 use super::{Cli, Server, http::Http, slack_server};
 use crate::cli::{Command, files::FileCommand};
 use crate::error::Error;
-use crate::output::Output;
+use crate::output::{Output, files};
 use crate::testing::auth_response;
 use base64::{Engine, prelude::BASE64_STANDARD};
 use serde_json::json;
@@ -233,11 +233,11 @@ async fn mcp_downloads_return_exact_bytes_and_remove_temporary_files_on_success_
                 if file.to_string() == "F2" {
                     return Err(Error::Transport);
                 }
-                Ok(Output::Downloaded {
+                Ok(Output::Files(files::Output::Downloaded {
                     file_id: file,
                     path: output,
                     size: 5,
-                })
+                }))
             }
         },
         true,
