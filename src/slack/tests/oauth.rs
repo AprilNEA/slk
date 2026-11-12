@@ -1,6 +1,6 @@
-use super::{auth_response, client};
 use crate::auth::oauth::{Authorization, Login};
 use crate::auth::{Credentials, Identity, Kind, Workspace};
+use crate::testing::{auth_response, client};
 use secrecy::ExposeSecret;
 use serde_json::{Value, json};
 use std::collections::BTreeMap;

@@ -1,7 +1,7 @@
-use super::client;
 use crate::auth::{Credentials, Kind};
 use crate::messages::MessageLink;
 use crate::slack::{CursorPage, ThreadRequest};
+use crate::testing::client;
 use serde_json::{Value, json};
 use wiremock::matchers::{method, path, query_param};
 use wiremock::{Mock, MockServer, ResponseTemplate};

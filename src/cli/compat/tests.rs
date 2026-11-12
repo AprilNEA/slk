@@ -2,7 +2,7 @@ use super::Prepared;
 use crate::auth::{Credentials, Kind, Store};
 use crate::cli::{Cli, Command};
 use crate::error::Result;
-use crate::slack::tests::{auth_response, client};
+use crate::testing::{self, auth_response, client};
 use clap::{CommandFactory, Parser};
 use serde_json::{Value, json};
 use std::fs;
@@ -385,17 +385,7 @@ fn compatibility_does_not_approve_writes_or_choose_ambiguous_workspaces() {
     let error = prepare(&mismatched, &store).err().unwrap();
     assert_eq!(error.report().code, "workspace_mismatch");
 
-    let temporary = tempfile::tempdir().unwrap();
-    let profile = json!({
-        "kind": "user", "identity": {"workspace_url": "https://team.slack.com", "team_id": "T12345678", "user_id": "W87654321"},
-        "keyring_ref": "00112233-4455-4677-8899-aabbccddeeff"
-    });
-    fs::write(
-        temporary.path().join("config.json"),
-        json!({"profiles": {"one": profile, "two": profile}}).to_string(),
-    )
-    .unwrap();
-    let store = Store::load(temporary.path().to_owned()).unwrap();
+    let (_directory, store) = testing::store(&["one", "two"], Kind::User, json!({}));
     assert!(
         prepare(
             &["conversations", "list", "--workspace", "T12345678"],

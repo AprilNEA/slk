@@ -1,6 +1,6 @@
 use super::prepare;
 use crate::auth::{Credentials, Kind};
-use crate::slack::tests::{auth_response, client};
+use crate::testing::{auth_response, client};
 use serde_json::{Value, json};
 use wiremock::matchers::{method, path, query_param};
 use wiremock::{Mock, MockServer, ResponseTemplate};

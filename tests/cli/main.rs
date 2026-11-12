@@ -6,9 +6,7 @@ use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output, Stdio};
 
-#[path = "cli/mcp.rs"]
 mod mcp;
-#[path = "cli/session.rs"]
 mod session;
 
 fn command(home: &Path) -> Command {

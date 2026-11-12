@@ -2,7 +2,7 @@ use super::{Cli, Server};
 use crate::auth::{Credentials, Kind, Store};
 use crate::cli::Command;
 use crate::error::Error;
-use crate::slack::tests::{auth_response, client};
+use crate::testing::{self, auth_response, client};
 use rmcp::{ServiceExt, model::CallToolRequestParams};
 use serde_json::{Value, json};
 use std::sync::Arc;
@@ -119,22 +119,9 @@ async fn mcp_reads_preserve_json_pagination_and_errors_without_retries() {
         .mount(&api)
         .await;
 
-    let directory = tempfile::tempdir().unwrap();
-    let profile = json!({
-        "kind": "user",
-        "identity": {"workspace_url": "https://team.slack.com/", "team_id": "T12345678", "user_id": "W87654321"},
-        "keyring_ref": "00112233-4455-4677-8899-aabbccddeeff"
-    });
-    std::fs::write(
-        directory.path().join("config.json"),
-        json!({
-            "profiles": {"work": profile, "another": profile}
-        })
-        .to_string(),
-    )
-    .unwrap();
+    let (_directory, store) = testing::store(&["work", "another"], Kind::User, json!({}));
     let context = Arc::new((
-        Store::load(directory.path().to_path_buf()).unwrap(),
+        store,
         client(&api),
         Credentials::parse(Kind::User, r#"{"token":"xoxp-test"}"#).unwrap(),
     ));

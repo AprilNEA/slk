@@ -1,6 +1,6 @@
 use super::{Session, capture};
 use crate::auth::{Settings, Workspace};
-use crate::slack::tests::{auth_response, client};
+use crate::testing::{auth_response, client};
 use base64::Engine;
 use base64::prelude::BASE64_STANDARD;
 use chromiumoxide::Page;

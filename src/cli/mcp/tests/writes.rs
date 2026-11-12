@@ -1,6 +1,6 @@
 use super::{Cli, Server, http::Http, slack_server};
 use crate::error::Error;
-use crate::slack::tests::auth_response;
+use crate::testing::auth_response;
 use base64::{Engine, prelude::BASE64_STANDARD};
 use rmcp::{
     ServerHandler, ServiceExt,

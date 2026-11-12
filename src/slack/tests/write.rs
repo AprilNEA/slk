@@ -1,10 +1,9 @@
-use super::client;
 use crate::auth::{Credentials, Kind};
 use crate::messages::{Change, Draft, Message, MessageText};
 use crate::slack::{ConversationAction, Slack};
+use crate::testing::client;
 use hyper_util::client::legacy::connect::HttpConnector;
 use serde_json::{Value, json};
-use slack_morphism::SlackClient;
 use slack_morphism::api::{
     SlackApiCanvasesEditRequest, SlackCanvasChange, SlackCanvasDocumentContent,
     SlackCanvasOperation,
@@ -189,13 +188,11 @@ async fn a_server_that_accepts_the_body_then_disconnects_receives_only_one_write
             drop(reader);
             (listener, serde_json::from_slice::<Value>(&body).unwrap())
         });
-        let slack = Slack {
-            client: SlackClient::new(
-                SlackClientHyperConnector::with_connector(HttpConnector::new())
-                    .with_slack_api_url(&format!("http://{address}/api")),
-            ),
-            timeout: Duration::from_secs(2),
-        };
+        let slack = Slack::new(
+            SlackClientHyperConnector::with_connector(HttpConnector::new())
+                .with_slack_api_url(&format!("http://{address}/api")),
+            Duration::from_secs(2),
+        );
         let credentials = Credentials::parse(Kind::User, r#"{"token":"xoxp-test"}"#).unwrap();
         let error = match method {
             "chat.postMessage" => slack.send(&credentials, &draft()).await.unwrap_err(),

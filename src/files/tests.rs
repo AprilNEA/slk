@@ -1,6 +1,6 @@
 use super::{File, FileUrl, Transfer, Upload};
 use crate::auth::{Credentials, FileSettings, Kind};
-use crate::slack::tests::client;
+use crate::testing::client;
 use bytes::Bytes;
 use rustls::pki_types::PrivatePkcs8KeyDer;
 use serde_json::{Value, json};

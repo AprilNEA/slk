@@ -13,6 +13,8 @@ mod output;
 mod platform;
 mod scheduled;
 mod slack;
+#[cfg(test)]
+mod testing;
 mod update;
 mod users;
 

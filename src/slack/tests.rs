@@ -1,10 +1,9 @@
 use super::Slack;
 use crate::auth::{Credentials, Kind, Settings};
 use crate::error::Error;
-use hyper_util::client::legacy::connect::HttpConnector;
+use crate::testing::{auth_response, client};
 use serde_json::{Value, json};
-use slack_morphism::hyper_tokio::SlackClientHyperConnector;
-use slack_morphism::{SlackClient, SlackClientHttpConnector};
+use slack_morphism::SlackClientHttpConnector;
 use std::time::Duration;
 use wiremock::matchers::{any, method, path};
 use wiremock::{Mock, MockServer, ResponseTemplate};
@@ -13,26 +12,6 @@ mod conversations;
 mod oauth;
 mod search;
 mod write;
-
-pub(crate) fn client(server: &MockServer) -> Slack<SlackClientHyperConnector<HttpConnector>> {
-    Slack {
-        client: SlackClient::new(
-            SlackClientHyperConnector::with_connector(HttpConnector::new())
-                .with_slack_api_url(&format!("{}/api", server.uri())),
-        ),
-        timeout: Duration::from_secs(2),
-    }
-}
-
-pub(crate) fn auth_response() -> Value {
-    json!({
-        "ok": true,
-        "url": "https://team.slack.com/",
-        "team": "Synthetic team",
-        "team_id": "T12345678",
-        "user_id": "W87654321"
-    })
-}
 
 #[tokio::test]
 async fn production_connectors_only_target_the_official_or_bound_workspace_api() {

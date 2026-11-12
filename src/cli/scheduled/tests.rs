@@ -1,9 +1,9 @@
 use super::Prepared;
-use crate::auth::{Credentials, Kind, Store};
+use crate::auth::{Credentials, Kind};
 use crate::cli::{Cli, Command};
 use crate::error::Result;
 use crate::scheduled::validate_time;
-use crate::slack::tests::{auth_response, client};
+use crate::testing::{self, auth_response, client};
 use chrono::{DateTime, Duration, Timelike, Utc};
 use clap::Parser;
 use serde_json::{Value, json};
@@ -12,14 +12,7 @@ use wiremock::matchers::{method, path};
 use wiremock::{Mock, MockServer, ResponseTemplate};
 
 fn prepare(args: &[&str]) -> Result<Prepared> {
-    let home = tempfile::tempdir().unwrap();
-    fs::write(home.path().join("config.json"), json!({
-        "settings": {"page_size": 7},
-        "profiles": {"work": {"kind": "user", "identity": {
-            "workspace_url": "https://team.slack.com", "team_id": "T12345678", "user_id": "W87654321"
-        }, "keyring_ref": "00112233-4455-4677-8899-aabbccddeeff"}}
-    }).to_string()).unwrap();
-    let store = Store::load(home.path().to_owned()).unwrap();
+    let (_directory, store) = testing::store(&["work"], Kind::User, json!({"page_size": 7}));
     let cli = Cli::try_parse_from(std::iter::once("slk").chain(args.iter().copied())).unwrap();
     let Command::Schedule { command } = cli.command else {
         panic!("expected schedule")

@@ -255,4 +255,4 @@ fn check_status(response: &Response) -> Result<()> {
 }
 
 #[cfg(test)]
-pub(crate) mod tests;
+mod tests;

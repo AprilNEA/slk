@@ -1,8 +1,8 @@
 use super::Prepared;
-use crate::auth::{Credentials, Kind, Store};
+use crate::auth::{Credentials, Kind};
 use crate::cli::{Cli, Command};
 use crate::error::{Error, Result};
-use crate::slack::tests::{auth_response, client};
+use crate::testing::{self, auth_response, client};
 use clap::Parser;
 use serde_json::json;
 use std::fs;
@@ -11,13 +11,7 @@ use wiremock::matchers::{body_json, method, path};
 use wiremock::{Mock, MockServer, ResponseTemplate};
 
 fn prepare(args: &[&str]) -> Result<Prepared> {
-    let home = tempfile::tempdir().unwrap();
-    fs::write(home.path().join("config.json"), json!({
-        "profiles": {"work": {"kind": "user", "identity": {
-            "workspace_url": "https://team.slack.com", "team_id": "T12345678", "user_id": "W87654321"
-        }, "keyring_ref": "00112233-4455-4677-8899-aabbccddeeff"}}
-    }).to_string()).unwrap();
-    let store = Store::load(home.path().to_owned()).unwrap();
+    let (_directory, store) = testing::store(&["work"], Kind::User, json!({}));
     let cli = Cli::try_parse_from(["slk", "canvas"].into_iter().chain(args.iter().copied()))
         .map_err(|_| Error::Arguments("Invalid test command."))?;
     let Command::Canvas { command } = cli.command else {

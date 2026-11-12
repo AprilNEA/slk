@@ -1,25 +1,15 @@
 use super::Prepared;
-use crate::auth::{Credentials, Kind, Store};
+use crate::auth::{Credentials, Kind};
 use crate::cli::{Cli, Command};
 use crate::error::Result;
-use crate::slack::tests::{auth_response, client};
+use crate::testing::{self, auth_response, client};
 use clap::Parser;
 use serde_json::{Value, json};
-use std::fs;
 use wiremock::matchers::{method, path, query_param};
 use wiremock::{Mock, MockServer, ResponseTemplate};
 
 fn prepare(args: &[&str], kind: Kind) -> Result<Prepared> {
-    let temporary = tempfile::tempdir().unwrap();
-    fs::write(temporary.path().join("config.json"), json!({
-        "settings": {"page_size": 7},
-        "profiles": {"work": {
-            "kind": kind,
-            "identity": {"workspace_url": "https://team.slack.com/", "team_id": "T12345678", "user_id": "W87654321"},
-            "keyring_ref": "00112233-4455-4677-8899-aabbccddeeff"
-        }}
-    }).to_string()).unwrap();
-    let store = Store::load(temporary.path().to_owned()).unwrap();
+    let (_directory, store) = testing::store(&["work"], kind, json!({"page_size": 7}));
     let cli = Cli::try_parse_from(std::iter::once("slk").chain(args.iter().copied())).unwrap();
     let Command::Users(command) = cli.command else {
         panic!("expected a user command");

@@ -71,10 +71,19 @@ impl Slack<SlackClientHyperHttpsConnector> {
         let connector = SlackClientHyperHttpsConnector::new()
             .map_err(|_| Error::Transport)?
             .with_slack_api_url(&endpoint);
-        Ok(Self {
+        Ok(Self::new(
+            connector,
+            Duration::from_secs(settings.request_timeout_secs.get()),
+        ))
+    }
+}
+
+impl<C: SlackClientHttpConnector + Send + Sync> Slack<C> {
+    pub(crate) fn new(connector: C, timeout: Duration) -> Self {
+        Self {
             client: SlackClient::new(connector),
-            timeout: Duration::from_secs(settings.request_timeout_secs.get()),
-        })
+            timeout,
+        }
     }
 }
 
@@ -233,4 +242,4 @@ fn safe_error_code(code: String) -> Option<String> {
 }
 
 #[cfg(test)]
-pub(crate) mod tests;
+mod tests;

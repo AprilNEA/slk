@@ -2,7 +2,7 @@ use super::{Cli, Server, http::Http, slack_server};
 use crate::cli::{Command, files::FileCommand};
 use crate::error::Error;
 use crate::output::Output;
-use crate::slack::tests::auth_response;
+use crate::testing::auth_response;
 use base64::{Engine, prelude::BASE64_STANDARD};
 use serde_json::json;
 use std::sync::{Arc, Mutex};
