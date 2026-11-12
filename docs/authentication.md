@@ -160,7 +160,7 @@ Slack SDK requests run sequentially and do not follow redirects. SDK rate-contro
 
 The explicit `update` command uses an independent HTTPS client for this project's GitHub releases. It follows bounded HTTPS redirects for release assets, sends no Slack credentials, and does not run during ordinary commands. See [update verification and replacement limits](distribution.md#explicit-self-update).
 
-See the [known SDK limitation](development.md#verification-limits) for HTTP 429 responses without a valid JSON body. For an uncertain write result, the CLI returns `write_outcome_unknown`; check Slack before repeating any send, DM open, edit, deletion, reaction, or upload.
+An HTTP 429 response to a Slack API request returns `rate_limited`, with `retry_after` when Slack sends `Retry-After`, even when the response body is empty or not valid JSON. For an uncertain write result, the CLI returns `write_outcome_unknown`; check Slack before repeating any send, DM open, edit, deletion, reaction, or upload.
 
 ## Text and JSON
 

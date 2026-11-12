@@ -4,9 +4,7 @@ A personal Slack CLI for developers, scripts, and coding agents, written in Rust
 
 Read and search Slack, work with messages, users, files, channels, schedules, and Canvas documents, or expose MCP tools over read-only stdio or authenticated HTTP. Writes require approval. Persistent credentials stay in the system keyring; headless sessions use explicit in-memory injection. slk does not cache messages or install a background service.
 
-**Experimental.** Releases retain a known HTTP 429 parsing defect in `slack-morphism`.
-
-The affected responses lose their rate-limit classification and `Retry-After`; the regression test is temporarily ignored while awaiting a corrected SDK release. Passing CI does not establish that this defect is fixed or that live Slack workflows work. Browser login and browser search are experimental. See [verification limits](docs/development.md#verification-limits) and the [OIDC-only release workflow](docs/distribution.md#release-workflows).
+**Experimental.** Passing CI does not establish that live Slack workflows work. Browser login and browser search are experimental. See [verification limits](docs/development.md#verification-limits) and the [OIDC-only release workflow](docs/distribution.md#release-workflows).
 
 ## Install
 

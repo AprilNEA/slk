@@ -1,6 +1,6 @@
 # Distribution and installation
 
-slk is experimental and retains the known SDK 429 defect. Its regression test is temporarily ignored for approved experimental releases; other release checks remain required. Neither publication nor passing CI establishes live Slack compatibility. Local archives are build artifacts, not published GitHub Releases. [Live workflow checks](development.md#verification-limits) remain incomplete. Publishing, release tags, signing, and notarization require explicit authorization.
+slk is experimental. Neither publication nor passing CI establishes live Slack compatibility. Local archives are build artifacts, not published GitHub Releases. [Live workflow checks](development.md#verification-limits) remain incomplete. Publishing, release tags, signing, and notarization require explicit authorization.
 
 ## Install a local source build
 
@@ -65,7 +65,7 @@ After verifying the executable, place it in a user-owned directory on PATH. Revi
 The release sequence is:
 
 1. Validate the exact `v<Cargo package version>` tag. Tag runs also require a license declaration and enabled crates.io publishing; preview plans do not.
-2. Run formatting, strict Clippy, release builds, and the full ordinary test suite on Linux, macOS, and Windows. Dependency auditing, crate packaging and verification, and workflow linting must also pass. The SDK 429 regression is an explicitly documented ignored test, not a successful acceptance check; see [verification limits](development.md#verification-limits) for the command and condition for restoring this test.
+2. Run formatting, strict Clippy, release builds, and the full ordinary test suite on Linux, macOS, and Windows. Dependency auditing, crate packaging and verification, and workflow linting must also pass.
 3. Build Linux x64, macOS arm64, macOS x64, and Windows x64 archives on native runners. Each archive must pass its smoke check before upload. Targets come from `dist-workspace.toml`; runners come from `workspace.metadata.release.runners` in `Cargo.toml`.
 4. After approval through the `release` environment, verify the Cargo package and publish to crates.io. No build cache is restored by the publishing or archive jobs.
 5. Only after crates.io publication succeeds, create the GitHub Release with archives and per-archive SHA256 files. SemVer prereleases become GitHub prereleases and are excluded by self-update.

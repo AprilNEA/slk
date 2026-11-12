@@ -7,8 +7,12 @@ use crate::model::pagination::{CursorPage, Page};
 use crate::model::scheduled::{Receipt, Scheduled};
 use serde::Deserialize;
 use serde_json::json;
+use slack_morphism::api::{
+    SlackApiChatDeleteScheduledMessageRequest, SlackApiChatDeleteScheduledMessageResponse,
+};
 use slack_morphism::{
     SlackApiToken, SlackChannelId, SlackClientHttpConnector, SlackResponseMetadata,
+    SlackScheduledMid,
 };
 
 #[derive(Deserialize)]
@@ -76,9 +80,13 @@ impl<C: SlackClientHttpConnector + Send + Sync> Slack<C> {
         credentials: &Credentials,
         receipt: &Receipt,
     ) -> Result<()> {
-        let _: serde_json::Value = self.write(credentials, "chat.deleteScheduledMessage", &json!({
-            "channel": receipt.channel_id, "scheduled_message_id": receipt.scheduled_message_id,
-        })).await?;
+        let request = SlackApiChatDeleteScheduledMessageRequest::new(
+            receipt.channel_id.clone(),
+            SlackScheduledMid(receipt.scheduled_message_id.clone()),
+        );
+        let _: SlackApiChatDeleteScheduledMessageResponse = self
+            .write(credentials, "chat.deleteScheduledMessage", &request)
+            .await?;
         Ok(())
     }
 }
