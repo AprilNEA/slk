@@ -11,7 +11,6 @@ mod ids;
 mod model;
 mod output;
 mod platform;
-mod scheduled;
 mod slack;
 #[cfg(test)]
 mod testing;

@@ -13,6 +13,7 @@ pub(crate) mod canvas;
 pub(crate) mod conversations;
 pub(crate) mod files;
 pub(crate) mod messages;
+pub(crate) mod scheduled;
 pub(crate) mod users;
 
 /// One validated operation on Slack, ready to run on a [`Connection`].
@@ -21,6 +22,7 @@ pub(crate) enum Request {
     Users(users::Request),
     Conversations(conversations::Request),
     Files(files::Request),
+    Scheduled(scheduled::Request),
     Canvas(canvas::Request),
 }
 
@@ -41,6 +43,10 @@ impl Request {
                 .await
                 .map(Output::Conversations),
             Self::Files(request) => request.execute(connection, prompt).await.map(Output::Files),
+            Self::Scheduled(request) => request
+                .execute(connection, prompt)
+                .await
+                .map(Output::Scheduled),
             Self::Canvas(request) => request
                 .execute(connection, prompt)
                 .await
@@ -51,9 +57,9 @@ impl Request {
 
 /// A Slack client whose credentials are verified to belong to the selected profile.
 pub(crate) struct Connection<C: SlackClientHttpConnector + Send> {
-    pub(crate) slack: Slack<C>,
-    pub(crate) credentials: Credentials,
-    pub(crate) profile: ProfileView,
+    slack: Slack<C>,
+    credentials: Credentials,
+    profile: ProfileView,
 }
 
 impl<C: SlackClientHttpConnector + Send + Sync> Connection<C> {

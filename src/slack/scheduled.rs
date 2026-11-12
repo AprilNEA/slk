@@ -3,7 +3,7 @@ use crate::auth::Credentials;
 use crate::error::{Error, Result};
 use crate::ids::parse_scheduled_message;
 use crate::model::messages::Draft;
-use crate::scheduled::{Receipt, Scheduled};
+use crate::model::scheduled::{Receipt, Scheduled};
 use serde::Deserialize;
 use serde_json::json;
 use slack_morphism::{

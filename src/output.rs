@@ -1,8 +1,6 @@
 use crate::auth::{Kind, ProfileView};
 use crate::error::{Error, Result};
-use crate::model::messages::Draft;
-use crate::scheduled::{Receipt, Scheduled};
-use crate::slack::{Page, Pagination, Resolution, ResolutionStatus};
+use crate::slack::{Pagination, Resolution, ResolutionStatus};
 use serde::Serialize;
 use std::io::{self, Write};
 
@@ -10,9 +8,8 @@ pub(crate) mod canvas;
 pub(crate) mod conversations;
 pub(crate) mod files;
 pub(crate) mod messages;
-mod scheduled;
+pub(crate) mod scheduled;
 pub(crate) mod users;
-pub(crate) use scheduled::{cancel_preview_text, schedule_preview_text};
 
 #[derive(Serialize)]
 #[serde(untagged)]
@@ -27,25 +24,7 @@ pub(crate) enum Output {
         local_credentials_removed: bool,
     },
     Messages(messages::Output),
-    Scheduled(Receipt),
-    Schedules(Page<Scheduled>),
-    SchedulePreview {
-        dry_run: bool,
-        #[serde(flatten)]
-        profile: ProfileView,
-        #[serde(flatten)]
-        draft: Draft,
-        post_at: i64,
-    },
-    ScheduleCancellationPreview {
-        dry_run: bool,
-        #[serde(flatten)]
-        profile: ProfileView,
-        scheduled: Scheduled,
-    },
-    ScheduleCancelled {
-        cancelled: Receipt,
-    },
+    Scheduled(scheduled::Output),
     Users(users::Output),
     Conversations(conversations::Output),
     Files(files::Output),
@@ -77,31 +56,7 @@ impl Output {
                     terminal_text(profile)
                 ),
                 Self::Messages(result) => result.text(),
-                Self::Scheduled(receipt) => {
-                    format!("Scheduled on Slack\t{}", scheduled::receipt_text(receipt))
-                }
-                Self::Schedules(page) => page_text(
-                    page.data.iter().map(scheduled::scheduled_text).collect(),
-                    &page.pagination,
-                ),
-                Self::SchedulePreview {
-                    profile,
-                    draft,
-                    post_at,
-                    ..
-                } => format!(
-                    "Dry run; no message was scheduled.\n{}",
-                    schedule_preview_text(profile, draft, *post_at)
-                ),
-                Self::ScheduleCancellationPreview {
-                    profile, scheduled, ..
-                } => format!(
-                    "Dry run; no schedule was cancelled.\n{}",
-                    cancel_preview_text(profile, scheduled)
-                ),
-                Self::ScheduleCancelled { cancelled } => {
-                    format!("Cancelled schedule\t{}", scheduled::receipt_text(cancelled))
-                }
+                Self::Scheduled(result) => result.text(),
                 Self::Users(result) => result.text(),
                 Self::Conversations(result) => result.text(),
                 Self::Files(result) => result.text(),

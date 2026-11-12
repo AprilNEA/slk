@@ -244,7 +244,7 @@ async fn a_server_that_accepts_the_body_then_disconnects_receives_only_one_write
             "chat.deleteScheduledMessage" => slack
                 .cancel_schedule(
                     &credentials,
-                    &crate::scheduled::Receipt {
+                    &crate::model::scheduled::Receipt {
                         channel_id: "C1".into(),
                         scheduled_message_id: "Q24".to_owned(),
                         post_at: 1_794_000_000,

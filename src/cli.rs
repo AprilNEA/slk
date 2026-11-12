@@ -214,9 +214,7 @@ async fn execute_with_store(cli: Cli, store: &mut Store) -> Result<Output> {
             command.prepare(store, selected.as_deref(), cli.json)?
         }
         Command::Schedule { command } => {
-            let (profile, prepared) = command.prepare(store, cli.profile.as_deref(), cli.json)?;
-            let connection = Connection::open(store, profile).await?;
-            return prepared.execute(connection, &write::Terminal).await;
+            command.prepare(store, cli.profile.as_deref(), cli.json)?
         }
         Command::Canvas { command } => command.prepare(store, cli.profile.as_deref(), cli.json)?,
     };
