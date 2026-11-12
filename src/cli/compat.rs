@@ -1,15 +1,14 @@
 use super::Paging;
 use super::conversations::{ChannelCommand, ConversationCommand};
-use super::messages::{self, MessageCommand, Target};
+use super::messages::{MessageCommand, Target};
 use super::write::{BodyInput, SendInput, WriteInput, WriteOptions};
-use crate::app::{self, Connection, Prompt};
+use crate::app::{self, messages::Order};
 use crate::auth::{ProfileView, Store};
 use crate::error::{Error, Result};
 use crate::ids::{parse_channel, parse_timestamp};
-use crate::messages::{MessageLink, parse_reaction};
-use crate::output::Output;
+use crate::model::messages::{MessageLink, parse_reaction};
 use clap::{ArgGroup, Args, Subcommand};
-use slack_morphism::{SlackChannelId, SlackClientHttpConnector, SlackReactionName, SlackTs};
+use slack_morphism::{SlackChannelId, SlackReactionName, SlackTs};
 use std::path::PathBuf;
 
 #[derive(Args)]
@@ -208,19 +207,13 @@ impl From<Body> for WriteInput {
     }
 }
 
-pub(super) enum Prepared {
-    Messages(messages::Prepared),
-    History(messages::Prepared),
-    Conversations(app::Request),
-}
-
 impl Command {
     pub(super) fn prepare(
         self,
         store: &Store,
         selected: Option<&str>,
         json: bool,
-    ) -> Result<(ProfileView, Prepared)> {
+    ) -> Result<(ProfileView, app::Request)> {
         let selector = match &self {
             Self::Conversations { selector, .. } | Self::Messages { selector, .. } => selector,
         };
@@ -232,9 +225,7 @@ impl Command {
                 command: Conversation::List(paging),
                 ..
             } => {
-                return ConversationCommand::Channels(paging)
-                    .prepare(store, selected, json)
-                    .map(|(profile, request)| (profile, Prepared::Conversations(request)));
+                return ConversationCommand::Channels(paging).prepare(store, selected, json);
             }
             Self::Conversations {
                 command:
@@ -247,14 +238,12 @@ impl Command {
                 ..
             } => {
                 if permalink.is_none() && thread_ts.is_none() {
-                    let conversation =
-                        channel_id.ok_or(Error::Arguments("Provide a channel ID."))?;
-                    return MessageCommand::Read {
-                        conversation,
-                        paging,
-                    }
-                    .prepare(store, selected, json)
-                    .map(|(profile, prepared)| (profile, Prepared::History(prepared)));
+                    let request = app::messages::Request::Read {
+                        channel: channel_id.ok_or(Error::Arguments("Provide a channel ID."))?,
+                        page: paging.resolve(store.settings()),
+                        order: Order::OldestFirst,
+                    };
+                    return Ok((profile, app::Request::Messages(request)));
                 }
                 MessageCommand::Thread {
                     target: ExactTarget {
@@ -295,8 +284,7 @@ impl Command {
                         paging,
                     },
                 }
-                .prepare(store, selected, json)
-                .map(|(profile, request)| (profile, Prepared::Conversations(request)));
+                .prepare(store, selected, json);
             }
             Self::Messages {
                 command:
@@ -373,29 +361,7 @@ impl Command {
                 options,
             },
         };
-        native
-            .prepare(store, selected, json)
-            .map(|(profile, prepared)| (profile, Prepared::Messages(prepared)))
-    }
-}
-
-impl Prepared {
-    pub(super) async fn execute<C: SlackClientHttpConnector + Send + Sync>(
-        self,
-        connection: Connection<C>,
-        prompt: &dyn Prompt,
-    ) -> Result<Output> {
-        match self {
-            Self::Messages(prepared) => prepared.execute(connection, prompt).await,
-            Self::Conversations(request) => request.execute(connection, prompt).await,
-            Self::History(prepared) => {
-                let mut output = prepared.execute(connection, prompt).await?;
-                if let Output::Messages(page) = &mut output {
-                    page.data.reverse();
-                }
-                Ok(output)
-            }
-        }
+        native.prepare(store, selected, json)
     }
 }
 

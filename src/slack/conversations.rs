@@ -1,8 +1,8 @@
 use super::{CursorPage, Page, Slack, pagination};
 use crate::auth::{Credentials, Kind};
 use crate::error::{Error, Result};
-use crate::messages::{Message, MessageLink, MessageTarget};
 use crate::model::conversations::Channel;
+use crate::model::messages::{Message, MessageLink, MessageTarget};
 use serde::Deserialize;
 use serde_json::Value;
 use slack_morphism::prelude::ValueStruct;

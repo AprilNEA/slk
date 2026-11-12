@@ -1,7 +1,7 @@
-use super::{Output, conversations, terminal_text, users};
+use super::{Output, conversations, messages, terminal_text, users};
 use crate::auth::{Identity, Kind, ProfileView, Workspace};
-use crate::messages::{Change, Message, MessageText};
 use crate::model::conversations::Channel;
+use crate::model::messages::{Change, Message, MessageText};
 use crate::model::users::User;
 use crate::slack::{Page, Pagination, Resolution, ResolutionStatus};
 use serde_json::{Value, json};
@@ -53,7 +53,7 @@ fn message_output_isolates_fields_and_preserves_later_messages_and_pagination() 
                 };
                 value.push_str(suffix);
                 let original = value.clone();
-                let output = Output::Messages(Page {
+                let output = Output::Messages(messages::Output::Messages(Page {
                     data: vec![
                         first,
                         Message {
@@ -70,7 +70,7 @@ fn message_output_isolates_fields_and_preserves_later_messages_and_pagination() 
                         next_cursor: next_cursor.map(str::to_owned),
                         has_more: Some(true),
                     },
-                });
+                }));
                 let mut text = Vec::new();
                 output.write(false, &mut text).unwrap();
                 let text = String::from_utf8(text).unwrap();
@@ -271,12 +271,12 @@ fn write_previews_preserve_actions_and_targets_after_unterminated_sequences() {
                 },
                 _ => unreachable!(),
             };
-            Output::ChangePreview {
+            Output::Messages(messages::Output::ChangePreview {
                 dry_run: true,
                 profile,
                 message,
                 change,
-            }
+            })
         };
         let mut text = Vec::new();
         output.write(false, &mut text).unwrap();

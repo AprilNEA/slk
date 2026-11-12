@@ -1,7 +1,7 @@
 use super::messages::preview_text;
 use super::{identity_text, terminal_text};
 use crate::auth::ProfileView;
-use crate::messages::Draft;
+use crate::model::messages::Draft;
 use crate::scheduled::{Receipt, Scheduled};
 use chrono::{DateTime, Utc};
 

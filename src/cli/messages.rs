@@ -1,16 +1,18 @@
 use super::write::{SendInput, WriteInput, WriteOptions};
 use super::{Paging, Traversal};
-use crate::app::{Approval, Connection, Prompt};
-use crate::auth::{Credentials, ProfileView, Store};
+use crate::app::{
+    self,
+    messages::{Destination, Order, Request},
+};
+use crate::auth::{ProfileView, Store};
 use crate::error::{Error, Result};
 use crate::ids::{parse_channel, parse_timestamp};
-use crate::messages::{Change, Content, Draft, MessageLink, parse_reaction};
-use crate::output::{self, Output};
-use crate::slack::{
-    CursorPage, MAX_SEARCH_PAGE, MAX_SEARCH_SIZE, SearchPage, Slack, ThreadRequest,
+use crate::model::messages::{
+    Change, MAX_SEARCH_PAGE, MAX_SEARCH_SIZE, MessageLink, MessageReference, SearchPage,
+    parse_reaction,
 };
 use clap::{Args, Subcommand};
-use slack_morphism::{SlackChannelId, SlackClientHttpConnector, SlackReactionName, SlackTs};
+use slack_morphism::{SlackChannelId, SlackReactionName, SlackTs};
 
 #[derive(Subcommand)]
 pub(super) enum MessageCommand {
@@ -132,72 +134,14 @@ pub(super) struct Target {
 }
 
 impl Target {
-    pub(super) fn validate(&self, profile: &ProfileView) -> Result<()> {
-        self.message_url
-            .check_workspace(&profile.identity.workspace_url)?;
-        self.message_url.root_hint(self.thread.as_ref())?;
-        Ok(())
-    }
-}
-
-pub(super) enum Destination {
-    Conversation(SlackChannelId),
-    Thread(Target),
-}
-
-impl Destination {
-    pub(super) async fn draft<C: SlackClientHttpConnector + Send + Sync>(
-        self,
-        slack: &Slack<C>,
-        credentials: &Credentials,
-        content: Content,
-    ) -> Result<Draft> {
-        let (channel_id, thread_ts) = match self {
-            Self::Conversation(channel) => (channel, None),
-            Self::Thread(target) => {
-                let root = slack
-                    .resolve_thread(credentials, &target.message_url, target.thread.as_ref())
-                    .await?;
-                (target.message_url.channel_id, Some(root))
-            }
+    pub(super) fn reference(self, profile: &ProfileView) -> Result<MessageReference> {
+        let reference = MessageReference {
+            link: self.message_url,
+            thread: self.thread,
         };
-        Ok(Draft {
-            channel_id,
-            thread_ts,
-            content,
-        })
+        reference.validate(&profile.identity.workspace_url)?;
+        Ok(reference)
     }
-}
-
-enum Request {
-    Pins(SlackChannelId),
-    Get(Target),
-    Search {
-        query: String,
-        page: SearchPage,
-    },
-    Read {
-        channel: SlackChannelId,
-        page: CursorPage,
-    },
-    Thread {
-        target: Target,
-        page: CursorPage,
-    },
-    Write {
-        destination: Destination,
-        content: Vec<Content>,
-        approval: Approval,
-    },
-    Modify {
-        target: Target,
-        change: Change,
-        approval: Approval,
-    },
-}
-
-pub(super) struct Prepared {
-    request: Request,
 }
 
 impl MessageCommand {
@@ -206,7 +150,7 @@ impl MessageCommand {
         store: &Store,
         selected: Option<&str>,
         json: bool,
-    ) -> Result<(ProfileView, Prepared)> {
+    ) -> Result<(ProfileView, app::Request)> {
         let selection = match &self {
             Self::Search { selector, .. } => selector.resolve(store, selected)?,
             _ => selected.map(str::to_owned),
@@ -251,18 +195,13 @@ impl MessageCommand {
             } => Request::Read {
                 channel: conversation,
                 page: paging.resolve(settings),
+                order: Order::NewestFirst,
             },
-            Self::Get { target } => {
-                target.validate(&profile)?;
-                Request::Get(target)
-            }
-            Self::Thread { target, paging } => {
-                target.validate(&profile)?;
-                Request::Thread {
-                    target,
-                    page: paging.resolve(settings),
-                }
-            }
+            Self::Get { target } => Request::Get(target.reference(&profile)?),
+            Self::Thread { target, paging } => Request::Thread {
+                target: target.reference(&profile)?,
+                page: paging.resolve(settings),
+            },
             Self::Send {
                 conversation,
                 input,
@@ -275,7 +214,7 @@ impl MessageCommand {
                 }
             }
             Self::Reply { target, input } => {
-                target.validate(&profile)?;
+                let target = target.reference(&profile)?;
                 let (content, approval) = input.prepare(settings, selected.is_some(), json)?;
                 Request::Write {
                     destination: Destination::Thread(target),
@@ -284,7 +223,7 @@ impl MessageCommand {
                 }
             }
             Self::Edit { target, input } => {
-                target.validate(&profile)?;
+                let target = target.reference(&profile)?;
                 let (content, approval) = input.prepare(selected.is_some(), json)?;
                 Request::Modify {
                     target,
@@ -292,188 +231,42 @@ impl MessageCommand {
                     approval,
                 }
             }
-            Self::Delete { target, options } => {
-                target.validate(&profile)?;
-                Request::Modify {
-                    target,
-                    change: Change::Delete,
-                    approval: options.prepare(selected.is_some(), json)?,
-                }
-            }
+            Self::Delete { target, options } => Request::Modify {
+                target: target.reference(&profile)?,
+                change: Change::Delete,
+                approval: options.prepare(selected.is_some(), json)?,
+            },
             Self::React {
                 target,
                 name,
                 options,
-            } => {
-                target.validate(&profile)?;
-                Request::Modify {
-                    target,
-                    change: Change::React { name },
-                    approval: options.prepare(selected.is_some(), json)?,
-                }
-            }
+            } => Request::Modify {
+                target: target.reference(&profile)?,
+                change: Change::React { name },
+                approval: options.prepare(selected.is_some(), json)?,
+            },
             Self::Unreact {
                 target,
                 name,
                 options,
-            } => {
-                target.validate(&profile)?;
-                Request::Modify {
-                    target,
-                    change: Change::Unreact { name },
-                    approval: options.prepare(selected.is_some(), json)?,
-                }
-            }
+            } => Request::Modify {
+                target: target.reference(&profile)?,
+                change: Change::Unreact { name },
+                approval: options.prepare(selected.is_some(), json)?,
+            },
             Self::Pins { conversation } => Request::Pins(conversation),
-            Self::Pin { target, options } => {
-                target.validate(&profile)?;
-                Request::Modify {
-                    target,
-                    change: Change::Pin,
-                    approval: options.prepare(selected.is_some(), json)?,
-                }
-            }
-            Self::Unpin { target, options } => {
-                target.validate(&profile)?;
-                Request::Modify {
-                    target,
-                    change: Change::Unpin,
-                    approval: options.prepare(selected.is_some(), json)?,
-                }
-            }
+            Self::Pin { target, options } => Request::Modify {
+                target: target.reference(&profile)?,
+                change: Change::Pin,
+                approval: options.prepare(selected.is_some(), json)?,
+            },
+            Self::Unpin { target, options } => Request::Modify {
+                target: target.reference(&profile)?,
+                change: Change::Unpin,
+                approval: options.prepare(selected.is_some(), json)?,
+            },
         };
-        Ok((profile, Prepared { request }))
-    }
-}
-
-impl Prepared {
-    pub(super) async fn execute<C: SlackClientHttpConnector + Send + Sync>(
-        self,
-        connection: Connection<C>,
-        prompt: &dyn Prompt,
-    ) -> Result<Output> {
-        let Connection {
-            slack,
-            credentials,
-            profile,
-        } = connection;
-        let credentials = &credentials;
-        match self.request {
-            Request::Pins(channel_id) => {
-                let data = slack.pins(credentials, &channel_id).await?;
-                Ok(Output::Pins { channel_id, data })
-            }
-            Request::Search { query, page } => slack
-                .search(credentials, &query, &page)
-                .await
-                .map(Output::Messages),
-            Request::Read { channel, page } => slack
-                .history(credentials, &channel, &page)
-                .await
-                .map(Output::Messages),
-            Request::Get(target) => slack
-                .message(credentials, &target.message_url, target.thread.as_ref())
-                .await
-                .map(|target| Output::Message(target.message)),
-            Request::Thread { target, page } => {
-                let root = slack
-                    .resolve_thread(credentials, &target.message_url, target.thread.as_ref())
-                    .await?;
-                slack
-                    .replies(
-                        credentials,
-                        &ThreadRequest {
-                            channel_id: &target.message_url.channel_id,
-                            thread_ts: &root,
-                            page: &page,
-                        },
-                    )
-                    .await
-                    .map(Output::Messages)
-            }
-            Request::Write {
-                destination,
-                content,
-                approval,
-            } => {
-                let mut content = content.into_iter();
-                let first = content
-                    .next()
-                    .expect("validated input contains at least one chunk");
-                let first = destination.draft(&slack, credentials, first).await?;
-                let mut drafts = vec![first];
-                for content in content {
-                    drafts.push(Draft {
-                        channel_id: drafts[0].channel_id.clone(),
-                        thread_ts: drafts[0].thread_ts.clone(),
-                        content,
-                    });
-                }
-                if !approval.confirm(prompt, "Send these messages in order?", || {
-                    output::messages::batch_preview_text(&profile, &drafts)
-                })? {
-                    return Ok(if drafts.len() == 1 {
-                        Output::Preview {
-                            dry_run: true,
-                            profile,
-                            draft: drafts.pop().expect("one preview remains"),
-                        }
-                    } else {
-                        Output::BatchPreview {
-                            dry_run: true,
-                            profile,
-                            drafts,
-                        }
-                    });
-                }
-                let total_chunks = drafts.len();
-                let mut sent = Vec::new();
-                for draft in drafts {
-                    match slack.send(credentials, &draft).await {
-                        Ok(receipt) => sent.push(receipt),
-                        Err(source) if total_chunks == 1 => return Err(source),
-                        Err(source) => {
-                            return Err(Error::SplitWrite {
-                                failed_chunk: sent.len() + 1,
-                                total_chunks,
-                                sent,
-                                source: Box::new(source),
-                            });
-                        }
-                    }
-                }
-                Ok(if total_chunks == 1 {
-                    Output::Sent(sent.pop().expect("the single send succeeded"))
-                } else {
-                    Output::SentBatch { data: sent }
-                })
-            }
-            Request::Modify {
-                target,
-                change,
-                approval,
-            } => {
-                let inspected = slack
-                    .message(credentials, &target.message_url, target.thread.as_ref())
-                    .await?;
-                change.validate(&inspected, &profile.identity)?;
-                let message = inspected.message;
-                if !approval.confirm(prompt, "Apply this change?", || {
-                    output::messages::change_preview_text(&profile, &message, &change)
-                })? {
-                    return Ok(Output::ChangePreview {
-                        dry_run: true,
-                        profile,
-                        message,
-                        change,
-                    });
-                }
-                slack
-                    .change(credentials, message, change)
-                    .await
-                    .map(Output::Changed)
-            }
-        }
+        Ok((profile, app::Request::Messages(request)))
     }
 }
 

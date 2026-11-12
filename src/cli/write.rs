@@ -1,12 +1,11 @@
 use crate::app::{Approval, Prompt};
 use crate::auth::Settings;
 use crate::error::{Error, Result};
-use crate::messages::{Content, MAX_TEXT_CHARS, MessageText};
+use crate::model::messages::{Content, MAX_TEXT_CHARS, MessageText, Split};
 use clap::{ArgGroup, Args};
 use std::fs;
 use std::io::{self, IsTerminal, Read, Write};
 use std::path::{Path, PathBuf};
-use text_splitter::{ChunkConfig, TextSplitter};
 
 #[derive(Args)]
 pub(super) struct WriteInput {
@@ -112,34 +111,15 @@ impl SendInput {
             return Ok((vec![content], approval));
         }
         let approval = self.input.options.prepare(explicit_profile, json)?;
-        let size = self
-            .chunk_chars
-            .map(usize::from)
-            .unwrap_or(settings.messages.chunk_chars.get());
-        if size > MAX_TEXT_CHARS {
-            return Err(Error::Arguments(
-                "settings.messages.chunk_chars exceeds the single-message limit.",
-            ));
-        }
-        let budget = usize::from(
-            self.max_chunks
-                .unwrap_or(settings.messages.max_chunks.get()),
-        );
-        let text = self.input.body.read()?;
-        if text.trim().is_empty() {
-            return Err(Error::Arguments("Message text must not be empty."));
-        }
-        let splitter = TextSplitter::new(ChunkConfig::new(size).with_trim(false));
-        let chunks = splitter.chunks(&text).take(budget + 1).collect::<Vec<_>>();
-        if chunks.len() > budget {
-            return Err(Error::Arguments(
-                "Message exceeds the chunk budget. Increase --max-chunks or shorten the text; nothing was sent.",
-            ));
-        }
-        let content = chunks
-            .into_iter()
-            .map(|chunk| MessageText::try_from(chunk.to_owned()).map(Content::from))
-            .collect::<Result<Vec<_>>>()?;
+        let split = Split::new(
+            self.chunk_chars
+                .map_or(settings.messages.chunk_chars.get(), usize::from),
+            usize::from(
+                self.max_chunks
+                    .unwrap_or(settings.messages.max_chunks.get()),
+            ),
+        )?;
+        let content = split.chunks(&self.input.body.read()?)?;
         Ok((content, approval))
     }
 }

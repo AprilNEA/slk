@@ -1,10 +1,8 @@
-use super::Prepared;
-use crate::app::Connection;
+use crate::app::Request;
 use crate::auth::{Credentials, Kind, ProfileView};
-use crate::cli::{Cli, Command, write::Terminal};
+use crate::cli::{Cli, Command};
 use crate::error::Result;
-use crate::output::Output;
-use crate::testing::{self, auth_response, client};
+use crate::testing::{self, auth_response, execute};
 use clap::Parser;
 use serde_json::{Value, json};
 use std::fs;
@@ -15,22 +13,13 @@ mod blocks;
 mod modify;
 mod split;
 
-fn prepare(args: &[&str], kind: Kind) -> Result<(ProfileView, Prepared)> {
+fn prepare(args: &[&str], kind: Kind) -> Result<(ProfileView, Request)> {
     let (_directory, store) = testing::store(&["work"], kind, json!({"page_size": 7}));
     let cli = Cli::try_parse_from(std::iter::once("slk").chain(args.iter().copied())).unwrap();
     let Command::Messages(command) = cli.command else {
         panic!("expected a message command");
     };
     command.prepare(&store, cli.profile.as_deref(), cli.json)
-}
-
-async fn execute(
-    (profile, prepared): (ProfileView, Prepared),
-    server: &MockServer,
-    credentials: &Credentials,
-) -> Result<Output> {
-    let connection = Connection::verify(client(server), credentials.clone(), profile).await?;
-    prepared.execute(connection, &Terminal).await
 }
 
 #[tokio::test]

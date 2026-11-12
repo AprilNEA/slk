@@ -1,7 +1,7 @@
 use crate::auth::{Credentials, Identity, Kind, Realm, Settings, Workspace};
 use crate::error::{Error, Result};
 use crate::ids::parse_timestamp;
-use crate::messages::{Draft, Sent};
+use crate::model::messages::{Draft, Sent};
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
 use slack_morphism::api::{SlackApiAuthTestResponse, SlackApiChatPostMessageRequest};
 use slack_morphism::errors::SlackClientError;
@@ -28,7 +28,6 @@ pub(crate) use conversations::ThreadRequest;
 pub(crate) use pagination::{
     CursorPage, MAX_PAGE_SIZE, Page, Pagination, Resolution, ResolutionStatus,
 };
-pub(crate) use search::{MAX_SEARCH_PAGE, MAX_SEARCH_SIZE, SearchPage};
 
 pub(crate) struct Slack<C: SlackClientHttpConnector + Send> {
     client: SlackClient<C>,

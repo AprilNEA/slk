@@ -188,7 +188,7 @@ pub(crate) enum Error {
         "Split send stopped at chunk {failed_chunk} of {total_chunks}. Check the confirmed receipts and failed chunk before resending; no request was retried."
     )]
     SplitWrite {
-        sent: Vec<crate::messages::Sent>,
+        sent: Vec<crate::model::messages::Sent>,
         failed_chunk: usize,
         total_chunks: usize,
         #[source]
@@ -210,7 +210,7 @@ pub(crate) struct ErrorReport<'a> {
 
 #[derive(Serialize)]
 pub(crate) struct BatchFailure<'a> {
-    pub sent: &'a [crate::messages::Sent],
+    pub sent: &'a [crate::model::messages::Sent],
     pub failed_chunk: usize,
     pub total_chunks: usize,
     pub failure: Box<ErrorReport<'a>>,

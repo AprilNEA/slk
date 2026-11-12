@@ -1,9 +1,113 @@
-use super::{identity_text, terminal_text};
+use super::{identity_text, page_text, terminal_text};
 use crate::auth::ProfileView;
-use crate::messages::{Change, Content, Draft, Message};
+use crate::model::messages::{Change, Changed, Content, Draft, Message, Sent};
+use crate::slack::Page;
+use serde::Serialize;
+use slack_morphism::SlackChannelId;
 use slack_morphism::prelude::ValueStruct;
 
-pub(super) fn message_text(message: &Message) -> String {
+#[derive(Serialize)]
+#[serde(untagged)]
+pub(crate) enum Output {
+    Messages(Page<Message>),
+    Message(Message),
+    Pins {
+        channel_id: SlackChannelId,
+        data: Vec<serde_json::Value>,
+    },
+    Preview {
+        dry_run: bool,
+        #[serde(flatten)]
+        profile: ProfileView,
+        #[serde(flatten)]
+        draft: Draft,
+    },
+    Sent(Sent),
+    BatchPreview {
+        dry_run: bool,
+        #[serde(flatten)]
+        profile: ProfileView,
+        drafts: Vec<Draft>,
+    },
+    SentBatch {
+        data: Vec<Sent>,
+    },
+    ChangePreview {
+        dry_run: bool,
+        #[serde(flatten)]
+        profile: ProfileView,
+        message: Message,
+        #[serde(flatten)]
+        change: Change,
+    },
+    Changed(Changed),
+}
+
+impl Output {
+    pub(super) fn text(&self) -> String {
+        match self {
+            Self::Messages(page) => {
+                let rows = page.data.iter().map(message_text).collect();
+                page_text(rows, &page.pagination)
+            }
+            Self::Message(message) => message_text(message),
+            Self::Pins { channel_id, data } => format!(
+                "Channel pins: {}\n{}",
+                terminal_text(channel_id.value()),
+                if data.is_empty() {
+                    "No pins.".to_owned()
+                } else {
+                    data.iter()
+                        .map(|item| terminal_text(&item.to_string()))
+                        .collect::<Vec<_>>()
+                        .join("\n")
+                },
+            ),
+            Self::Preview { profile, draft, .. } => {
+                format!(
+                    "Dry run; no message was sent.\n{}",
+                    preview_text(profile, draft)
+                )
+            }
+            Self::Sent(sent) => format!(
+                "Sent\t{}\t{}\tthread:{}",
+                terminal_text(sent.channel_id.value()),
+                terminal_text(sent.ts.value()),
+                terminal_text(sent.thread_ts.as_ref().map_or("-", |ts| ts.value()))
+            ),
+            Self::BatchPreview {
+                profile, drafts, ..
+            } => format!(
+                "Dry run; no messages were sent.\n{}",
+                batch_preview_text(profile, drafts),
+            ),
+            Self::SentBatch { data } => format!(
+                "Sent {} messages in order.\n{}",
+                data.len(),
+                terminal_text(
+                    &serde_json::to_string(data).expect("receipts contain serializable strings")
+                )
+            ),
+            Self::ChangePreview {
+                profile,
+                message,
+                change,
+                ..
+            } => format!(
+                "Dry run; no change was made.\n{}",
+                change_preview_text(profile, message, change)
+            ),
+            Self::Changed(result) => format!(
+                "Applied\t{}\t{}\n{}",
+                terminal_text(result.channel_id.value()),
+                terminal_text(result.ts.value()),
+                change_text(&result.change),
+            ),
+        }
+    }
+}
+
+fn message_text(message: &Message) -> String {
     let mut text = format!(
         "{}\t{}\t{}",
         terminal_text(message.channel_id.value()),
@@ -77,7 +181,7 @@ pub(crate) fn change_preview_text(
     )
 }
 
-pub(super) fn change_text(change: &Change) -> String {
+fn change_text(change: &Change) -> String {
     match change {
         Change::Edit { content } => {
             format!("Action: edit\nNew text:\n{}", content_text(content))

@@ -12,10 +12,12 @@ use std::future::Future;
 pub(crate) mod canvas;
 pub(crate) mod conversations;
 pub(crate) mod files;
+pub(crate) mod messages;
 pub(crate) mod users;
 
 /// One validated operation on Slack, ready to run on a [`Connection`].
 pub(crate) enum Request {
+    Messages(messages::Request),
     Users(users::Request),
     Conversations(conversations::Request),
     Files(files::Request),
@@ -29,6 +31,10 @@ impl Request {
         prompt: &dyn Prompt,
     ) -> Result<Output> {
         match self {
+            Self::Messages(request) => request
+                .execute(connection, prompt)
+                .await
+                .map(Output::Messages),
             Self::Users(request) => request.execute(connection, prompt).await.map(Output::Users),
             Self::Conversations(request) => request
                 .execute(connection, prompt)

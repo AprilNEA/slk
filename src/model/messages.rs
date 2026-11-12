@@ -1,4 +1,4 @@
-use crate::auth::{Identity, Workspace};
+use crate::auth::{Identity, Kind, Realm, Workspace};
 use crate::error::{Error, Result};
 use crate::ids::{parse_channel, parse_timestamp};
 use serde::{Deserialize, Serialize};
@@ -6,10 +6,13 @@ use serde_json::Value;
 use slack_morphism::blocks::SlackBlock;
 use slack_morphism::{SlackChannelId, SlackMessageContent, SlackReactionName, SlackTs};
 use std::str::FromStr;
+use text_splitter::{ChunkConfig, TextSplitter};
 use url::Url;
 
 // Slack may split longer text into multiple messages even below its truncation limit.
 pub(crate) const MAX_TEXT_CHARS: usize = 4_000;
+pub(crate) const MAX_SEARCH_SIZE: u16 = 20;
+pub(crate) const MAX_SEARCH_PAGE: u32 = 100;
 
 #[derive(Debug, Serialize)]
 pub(crate) struct Message {
@@ -97,6 +100,20 @@ impl MessageLink {
             ));
         }
         Ok(explicit.or(self.thread_ts.as_ref()).unwrap_or(&self.ts))
+    }
+}
+
+/// A message permalink and an optional thread root, before Slack verifies either.
+pub(crate) struct MessageReference {
+    pub link: MessageLink,
+    pub thread: Option<SlackTs>,
+}
+
+impl MessageReference {
+    pub(crate) fn validate(&self, workspace: &Workspace) -> Result<()> {
+        self.link.check_workspace(workspace)?;
+        self.link.root_hint(self.thread.as_ref())?;
+        Ok(())
     }
 }
 
@@ -251,6 +268,77 @@ pub(crate) struct Changed {
     pub ts: SlackTs,
     #[serde(flatten)]
     pub change: Change,
+}
+
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
+pub(crate) struct SearchPage {
+    pub limit: u16,
+    pub cursor: Option<String>,
+    pub page: Option<u32>,
+    pub max_pages: u16,
+}
+
+impl SearchPage {
+    pub(crate) fn validate(&self, kind: Kind, realm: Realm) -> Result<()> {
+        if kind == Kind::Bot || (kind == Kind::User && realm == Realm::Gov) {
+            return Err(Error::Capability(
+                "RTS search requires a commercial Slack user token. Bot and GovSlack user search are unavailable; no identity or endpoint fallback is attempted.",
+            ));
+        }
+        if self.limit == 0 || self.limit > MAX_SEARCH_SIZE {
+            return Err(Error::Arguments("Search --limit must be between 1 and 20."));
+        }
+        match kind {
+            Kind::User if self.page.is_some() => Err(Error::Arguments(
+                "User search uses --cursor, not --page. No legacy search fallback is available.",
+            )),
+            Kind::Browser if self.cursor.is_some() => Err(Error::Arguments(
+                "Experimental browser search uses --page, not --cursor.",
+            )),
+            _ => Ok(()),
+        }
+    }
+}
+
+/// The limits of a split send: Unicode characters per chunk and the chunk budget.
+pub(crate) struct Split {
+    chunk_chars: usize,
+    max_chunks: usize,
+}
+
+impl Split {
+    pub(crate) fn new(chunk_chars: usize, max_chunks: usize) -> Result<Self> {
+        if chunk_chars > MAX_TEXT_CHARS {
+            return Err(Error::Arguments(
+                "settings.messages.chunk_chars exceeds the single-message limit.",
+            ));
+        }
+        Ok(Self {
+            chunk_chars,
+            max_chunks,
+        })
+    }
+
+    /// Splits `text` into ordered messages, or rejects all of it when it exceeds the chunk budget.
+    pub(crate) fn chunks(&self, text: &str) -> Result<Vec<Content>> {
+        if text.trim().is_empty() {
+            return Err(Error::Arguments("Message text must not be empty."));
+        }
+        let splitter = TextSplitter::new(ChunkConfig::new(self.chunk_chars).with_trim(false));
+        let chunks = splitter
+            .chunks(text)
+            .take(self.max_chunks + 1)
+            .collect::<Vec<_>>();
+        if chunks.len() > self.max_chunks {
+            return Err(Error::Arguments(
+                "Message exceeds the chunk budget. Increase --max-chunks or shorten the text; nothing was sent.",
+            ));
+        }
+        chunks
+            .into_iter()
+            .map(|chunk| MessageText::try_from(chunk.to_owned()).map(Content::from))
+            .collect()
+    }
 }
 
 pub(crate) fn parse_reaction(value: &str) -> Result<SlackReactionName> {

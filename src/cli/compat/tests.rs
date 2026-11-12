@@ -1,10 +1,8 @@
-use super::Prepared;
-use crate::app::Connection;
+use crate::app::Request;
 use crate::auth::{Credentials, Kind, ProfileView, Store};
-use crate::cli::{Cli, Command, write::Terminal};
+use crate::cli::{Cli, Command};
 use crate::error::Result;
-use crate::output::Output;
-use crate::testing::{self, auth_response, client};
+use crate::testing::{self, auth_response, execute};
 use clap::{CommandFactory, Parser};
 use serde_json::{Value, json};
 use std::fs;
@@ -20,21 +18,12 @@ fn store() -> Store {
     }).to_string()).unwrap()
 }
 
-fn prepare(args: &[&str], store: &Store) -> Result<(ProfileView, Prepared)> {
+fn prepare(args: &[&str], store: &Store) -> Result<(ProfileView, Request)> {
     let cli = Cli::try_parse_from(std::iter::once("slk").chain(args.iter().copied())).unwrap();
     let Command::Compatibility(command) = cli.command else {
         panic!("expected a compatibility command");
     };
     command.prepare(store, cli.profile.as_deref(), cli.json)
-}
-
-async fn execute(
-    (profile, prepared): (ProfileView, Prepared),
-    server: &MockServer,
-    credentials: &Credentials,
-) -> Result<Output> {
-    let connection = Connection::verify(client(server), credentials.clone(), profile).await?;
-    prepared.execute(connection, &Terminal).await
 }
 
 #[test]
@@ -453,11 +442,13 @@ async fn compatibility_history_is_chronological_and_search_keeps_native_queries(
         let Command::Messages(command) = cli.command else {
             panic!("expected search")
         };
-        let (profile, prepared) = command.prepare(&store, None, true).unwrap();
-        let connection = Connection::verify(client(&server), credentials.clone(), profile)
-            .await
-            .unwrap();
-        prepared.execute(connection, &Terminal).await.unwrap();
+        execute(
+            command.prepare(&store, None, true).unwrap(),
+            &server,
+            &credentials,
+        )
+        .await
+        .unwrap();
     }
     let queries = server
         .received_requests()

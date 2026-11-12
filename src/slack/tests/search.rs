@@ -1,5 +1,5 @@
 use crate::auth::{Credentials, Kind};
-use crate::slack::SearchPage;
+use crate::model::messages::SearchPage;
 use crate::testing::client;
 use serde_json::json;
 use wiremock::matchers::{body_partial_json, method, path, query_param};

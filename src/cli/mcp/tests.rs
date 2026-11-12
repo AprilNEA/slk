@@ -40,12 +40,12 @@ fn slack_server(api: &MockServer) -> impl rmcp::ServerHandler + Clone {
                 };
                 match cli.command {
                     Command::Messages(command) => {
-                        let (profile, prepared) = command.prepare(store, selected, cli.json)?;
-                        prepared.execute(connect(profile).await?, &Terminal).await
+                        let (profile, request) = command.prepare(store, selected, cli.json)?;
+                        request.execute(connect(profile).await?, &Terminal).await
                     }
                     Command::Compatibility(command) => {
-                        let (profile, prepared) = command.prepare(store, selected, cli.json)?;
-                        prepared.execute(connect(profile).await?, &Terminal).await
+                        let (profile, request) = command.prepare(store, selected, cli.json)?;
+                        request.execute(connect(profile).await?, &Terminal).await
                     }
                     Command::Users(command) => {
                         let (profile, request) = command.prepare(store, selected, cli.json)?;
@@ -124,11 +124,11 @@ async fn mcp_reads_preserve_json_pagination_and_errors_without_retries() {
                 let Command::Messages(command) = cli.command else {
                     panic!("expected a message read");
                 };
-                let (profile, prepared) =
+                let (profile, request) =
                     command.prepare(store, cli.profile.as_deref(), cli.json)?;
                 let connection =
                     Connection::verify(client_at(uri), credentials.clone(), profile).await?;
-                prepared.execute(connection, &Terminal).await
+                request.execute(connection, &Terminal).await
             }
         },
         false,

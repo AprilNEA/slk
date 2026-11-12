@@ -1,25 +1,14 @@
 use super::conversations::{CONVERSATION_TYPES, WireMessage};
 use super::pagination::{self, RequestPage};
 use super::{Page, Pagination, Slack};
-use crate::auth::{Credentials, Kind, Realm};
+use crate::auth::{Credentials, Kind};
 use crate::error::{Error, Result};
-use crate::messages::Message;
+use crate::model::messages::{MAX_SEARCH_PAGE, Message, SearchPage};
 use serde::Deserialize;
 use slack_morphism::{
     SlackApiToken, SlackBasicChannelInfo, SlackChannelId, SlackClientHttpConnector,
     SlackResponseMetadata, SlackTs,
 };
-
-pub(crate) const MAX_SEARCH_SIZE: u16 = 20;
-pub(crate) const MAX_SEARCH_PAGE: u32 = 100;
-
-#[derive(Clone, Debug, Eq, Hash, PartialEq)]
-pub(crate) struct SearchPage {
-    pub limit: u16,
-    pub cursor: Option<String>,
-    pub page: Option<u32>,
-    pub max_pages: u16,
-}
 
 impl RequestPage for SearchPage {
     fn max_pages(&self) -> u16 {
@@ -36,28 +25,6 @@ impl RequestPage for SearchPage {
                 self.page = *next_page;
                 Ok(self.page.is_some())
             }
-        }
-    }
-}
-
-impl SearchPage {
-    pub(crate) fn validate(&self, kind: Kind, realm: Realm) -> Result<()> {
-        if kind == Kind::Bot || (kind == Kind::User && realm == Realm::Gov) {
-            return Err(Error::Capability(
-                "RTS search requires a commercial Slack user token. Bot and GovSlack user search are unavailable; no identity or endpoint fallback is attempted.",
-            ));
-        }
-        if self.limit == 0 || self.limit > MAX_SEARCH_SIZE {
-            return Err(Error::Arguments("Search --limit must be between 1 and 20."));
-        }
-        match kind {
-            Kind::User if self.page.is_some() => Err(Error::Arguments(
-                "User search uses --cursor, not --page. No legacy search fallback is available.",
-            )),
-            Kind::Browser if self.cursor.is_some() => Err(Error::Arguments(
-                "Experimental browser search uses --page, not --cursor.",
-            )),
-            _ => Ok(()),
         }
     }
 }

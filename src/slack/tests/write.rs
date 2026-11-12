@@ -1,6 +1,6 @@
 use crate::auth::{Credentials, Kind};
-use crate::messages::{Change, Draft, Message, MessageText};
 use crate::model::conversations::ConversationAction;
+use crate::model::messages::{Change, Draft, Message, MessageText};
 use crate::slack::Slack;
 use crate::testing::client;
 use hyper_util::client::legacy::connect::HttpConnector;

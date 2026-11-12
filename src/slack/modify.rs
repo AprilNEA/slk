@@ -1,7 +1,7 @@
 use super::Slack;
 use crate::auth::Credentials;
 use crate::error::{Error, Result};
-use crate::messages::{Change, Changed, Message};
+use crate::model::messages::{Change, Changed, Message};
 use serde::Deserialize;
 use slack_morphism::api::{
     SlackApiChatDeleteRequest, SlackApiChatUpdateRequest, SlackApiPinsAddRequest,

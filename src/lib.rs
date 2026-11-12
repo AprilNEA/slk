@@ -8,7 +8,6 @@ mod auth;
 mod cli;
 mod error;
 mod ids;
-mod messages;
 mod model;
 mod output;
 mod platform;

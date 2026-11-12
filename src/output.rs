@@ -1,11 +1,9 @@
 use crate::auth::{Kind, ProfileView};
 use crate::error::{Error, Result};
-use crate::messages::{Change, Changed, Draft, Message, Sent};
+use crate::model::messages::Draft;
 use crate::scheduled::{Receipt, Scheduled};
 use crate::slack::{Page, Pagination, Resolution, ResolutionStatus};
 use serde::Serialize;
-use slack_morphism::SlackChannelId;
-use slack_morphism::prelude::ValueStruct;
 use std::io::{self, Write};
 
 pub(crate) mod canvas;
@@ -14,7 +12,6 @@ pub(crate) mod files;
 pub(crate) mod messages;
 mod scheduled;
 pub(crate) mod users;
-use messages::{batch_preview_text, change_preview_text, change_text, message_text, preview_text};
 pub(crate) use scheduled::{cancel_preview_text, schedule_preview_text};
 
 #[derive(Serialize)]
@@ -29,38 +26,7 @@ pub(crate) enum Output {
         profile: String,
         local_credentials_removed: bool,
     },
-    Messages(Page<Message>),
-    Message(Message),
-    Pins {
-        channel_id: SlackChannelId,
-        data: Vec<serde_json::Value>,
-    },
-    Preview {
-        dry_run: bool,
-        #[serde(flatten)]
-        profile: ProfileView,
-        #[serde(flatten)]
-        draft: Draft,
-    },
-    Sent(Sent),
-    BatchPreview {
-        dry_run: bool,
-        #[serde(flatten)]
-        profile: ProfileView,
-        drafts: Vec<Draft>,
-    },
-    SentBatch {
-        data: Vec<Sent>,
-    },
-    ChangePreview {
-        dry_run: bool,
-        #[serde(flatten)]
-        profile: ProfileView,
-        message: Message,
-        #[serde(flatten)]
-        change: Change,
-    },
-    Changed(Changed),
+    Messages(messages::Output),
     Scheduled(Receipt),
     Schedules(Page<Scheduled>),
     SchedulePreview {
@@ -110,64 +76,7 @@ impl Output {
                     "Removed local credentials for {}. The Slack session was not revoked.",
                     terminal_text(profile)
                 ),
-                Self::Messages(page) => {
-                    let rows = page.data.iter().map(message_text).collect();
-                    page_text(rows, &page.pagination)
-                }
-                Self::Message(message) => message_text(message),
-                Self::Pins { channel_id, data } => format!(
-                    "Channel pins: {}\n{}",
-                    terminal_text(channel_id.value()),
-                    if data.is_empty() {
-                        "No pins.".to_owned()
-                    } else {
-                        data.iter()
-                            .map(|item| terminal_text(&item.to_string()))
-                            .collect::<Vec<_>>()
-                            .join("\n")
-                    },
-                ),
-                Self::Preview { profile, draft, .. } => {
-                    format!(
-                        "Dry run; no message was sent.\n{}",
-                        preview_text(profile, draft)
-                    )
-                }
-                Self::Sent(sent) => format!(
-                    "Sent\t{}\t{}\tthread:{}",
-                    terminal_text(sent.channel_id.value()),
-                    terminal_text(sent.ts.value()),
-                    terminal_text(sent.thread_ts.as_ref().map_or("-", |ts| ts.value()))
-                ),
-                Self::BatchPreview {
-                    profile, drafts, ..
-                } => format!(
-                    "Dry run; no messages were sent.\n{}",
-                    batch_preview_text(profile, drafts),
-                ),
-                Self::SentBatch { data } => format!(
-                    "Sent {} messages in order.\n{}",
-                    data.len(),
-                    terminal_text(
-                        &serde_json::to_string(data)
-                            .expect("receipts contain serializable strings")
-                    )
-                ),
-                Self::ChangePreview {
-                    profile,
-                    message,
-                    change,
-                    ..
-                } => format!(
-                    "Dry run; no change was made.\n{}",
-                    change_preview_text(profile, message, change)
-                ),
-                Self::Changed(result) => format!(
-                    "Applied\t{}\t{}\n{}",
-                    terminal_text(result.channel_id.value()),
-                    terminal_text(result.ts.value()),
-                    change_text(&result.change),
-                ),
+                Self::Messages(result) => result.text(),
                 Self::Scheduled(receipt) => {
                     format!("Scheduled on Slack\t{}", scheduled::receipt_text(receipt))
                 }

@@ -1,13 +1,13 @@
 use super::{
     Paging,
-    messages::{Destination, Target},
+    messages::Target,
     write::{WriteInput, WriteOptions},
 };
-use crate::app::{Approval, Connection, Prompt};
+use crate::app::{Approval, Connection, Prompt, messages::Destination};
 use crate::auth::{ProfileView, Store};
 use crate::error::{Error, Result};
 use crate::ids::{parse_channel, parse_scheduled_message};
-use crate::messages::Content;
+use crate::model::messages::Content;
 use crate::output::{self, Output};
 use crate::scheduled::validate_time;
 use crate::slack::CursorPage;
@@ -106,7 +106,7 @@ impl ScheduledCommand {
                 }
             }
             Self::Reply { target, input } => {
-                target.validate(&profile)?;
+                let target = target.reference(&profile)?;
                 validate_time(input.at, Utc::now())?;
                 let (content, approval) = input.input.prepare(selected.is_some(), json)?;
                 Request::Create {

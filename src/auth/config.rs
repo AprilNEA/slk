@@ -46,7 +46,7 @@ pub(crate) struct MessageSettings {
 impl Default for MessageSettings {
     fn default() -> Self {
         Self {
-            chunk_chars: NonZeroUsize::new(crate::messages::MAX_TEXT_CHARS)
+            chunk_chars: NonZeroUsize::new(crate::model::messages::MAX_TEXT_CHARS)
                 .expect("the message limit is nonzero"),
             max_chunks: NonZeroU16::new(10).expect("the default chunk budget is nonzero"),
         }
