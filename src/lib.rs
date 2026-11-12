@@ -17,7 +17,6 @@ mod slack;
 #[cfg(test)]
 mod testing;
 mod update;
-mod users;
 
 const APP_ID: &str = env!("CARGO_PKG_NAME");
 

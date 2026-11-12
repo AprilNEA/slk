@@ -11,9 +11,11 @@ use std::future::Future;
 
 pub(crate) mod canvas;
 pub(crate) mod files;
+pub(crate) mod users;
 
 /// One validated operation on Slack, ready to run on a [`Connection`].
 pub(crate) enum Request {
+    Users(users::Request),
     Files(files::Request),
     Canvas(canvas::Request),
 }
@@ -25,6 +27,7 @@ impl Request {
         prompt: &dyn Prompt,
     ) -> Result<Output> {
         match self {
+            Self::Users(request) => request.execute(connection, prompt).await.map(Output::Users),
             Self::Files(request) => request.execute(connection, prompt).await.map(Output::Files),
             Self::Canvas(request) => request
                 .execute(connection, prompt)

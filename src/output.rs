@@ -3,7 +3,6 @@ use crate::error::{Error, Result};
 use crate::messages::{Change, Changed, Draft, Message, Sent};
 use crate::scheduled::{Receipt, Scheduled};
 use crate::slack::{Channel, Page, Pagination, Resolution, ResolutionStatus};
-use crate::users::{OpenedDm, User};
 use serde::Serialize;
 use slack_morphism::SlackChannelId;
 use slack_morphism::prelude::ValueStruct;
@@ -14,6 +13,7 @@ pub(crate) mod conversations;
 pub(crate) mod files;
 pub(crate) mod messages;
 mod scheduled;
+pub(crate) mod users;
 use messages::{batch_preview_text, change_preview_text, change_text, message_text, preview_text};
 pub(crate) use scheduled::{cancel_preview_text, schedule_preview_text};
 
@@ -36,17 +36,6 @@ pub(crate) enum Output {
         channel_id: SlackChannelId,
         data: Vec<serde_json::Value>,
     },
-    Users(Page<User>),
-    User(User),
-    ResolvedUsers(Resolution<User>),
-    ResolvedChannels(Resolution<Channel>),
-    DmPreview {
-        dry_run: bool,
-        #[serde(flatten)]
-        profile: ProfileView,
-        target: User,
-    },
-    DmOpened(OpenedDm),
     Preview {
         dry_run: bool,
         #[serde(flatten)]
@@ -92,6 +81,7 @@ pub(crate) enum Output {
     ScheduleCancelled {
         cancelled: Receipt,
     },
+    Users(users::Output),
     Conversations(conversations::Output),
     Files(files::Output),
     Canvas(canvas::Output),
@@ -125,29 +115,6 @@ impl Output {
                     let rows = page.data.iter().map(channel_text).collect();
                     page_text(rows, &page.pagination)
                 }
-                Self::Users(page) => {
-                    page_text(page.data.iter().map(user_text).collect(), &page.pagination)
-                }
-                Self::User(user) => user_text(user),
-                Self::ResolvedUsers(result) => resolution_text(result, user_text),
-                Self::ResolvedChannels(result) => resolution_text(result, channel_text),
-                Self::DmPreview {
-                    profile, target, ..
-                } => format!(
-                    "Dry run; no conversation was opened or created.\n{}",
-                    dm_preview_text(profile, target)
-                ),
-                Self::DmOpened(opened) => format!(
-                    "Opened DM\t{}\t{}\talready_open:{}\tno_op:{}\nNo message was sent.",
-                    terminal_text(opened.channel_id.value()),
-                    terminal_text(opened.user_id.value()),
-                    opened
-                        .already_open
-                        .map_or_else(|| "unknown".to_owned(), |value| value.to_string()),
-                    opened
-                        .no_op
-                        .map_or_else(|| "unknown".to_owned(), |value| value.to_string()),
-                ),
                 Self::Messages(page) => {
                     let rows = page.data.iter().map(message_text).collect();
                     page_text(rows, &page.pagination)
@@ -231,6 +198,7 @@ impl Output {
                 Self::ScheduleCancelled { cancelled } => {
                     format!("Cancelled schedule\t{}", scheduled::receipt_text(cancelled))
                 }
+                Self::Users(result) => result.text(),
                 Self::Conversations(result) => result.text(),
                 Self::Files(result) => result.text(),
                 Self::Canvas(result) => result.text(),
@@ -257,37 +225,6 @@ fn channel_text(channel: &Channel) -> String {
         ),
         if channel.is_archived {
             " (archived)"
-        } else {
-            ""
-        },
-    )
-}
-
-fn user_text(user: &User) -> String {
-    let profile = user.profile.as_ref();
-    format!(
-        "{}\t{}\t{}\t{}\t{}{}{}",
-        terminal_text(user.user_id.value()),
-        terminal_text(user.name.as_deref().unwrap_or("-")),
-        terminal_text(
-            profile
-                .and_then(|value| value.display_name.as_deref())
-                .unwrap_or("-")
-        ),
-        terminal_text(
-            user.real_name
-                .as_deref()
-                .or(profile.and_then(|value| value.real_name.as_deref()))
-                .unwrap_or("-")
-        ),
-        terminal_text(
-            profile
-                .and_then(|value| value.email.as_deref())
-                .unwrap_or("-")
-        ),
-        if user.deleted { " (deactivated)" } else { "" },
-        if user.is_bot || user.is_app_user {
-            " (app)"
         } else {
             ""
         },
@@ -339,14 +276,6 @@ fn page_text(rows: Vec<String>, pagination: &Pagination) -> String {
         _ => (),
     }
     text
-}
-
-pub(crate) fn dm_preview_text(profile: &ProfileView, user: &User) -> String {
-    format!(
-        "{}\nAction: open or create a single-person DM\nTarget: {}\nNo message will be sent.",
-        identity_text(profile),
-        user_text(user),
-    )
 }
 
 fn identity_text(profile: &ProfileView) -> String {

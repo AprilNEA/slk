@@ -306,9 +306,7 @@ impl Prepared {
                 let mut targets = Vec::with_capacity(users.len());
                 for id in &users {
                     let target = slack.user(credentials, id).await?;
-                    if target.deleted || target.is_bot || target.is_app_user {
-                        return Err(Error::DmTarget);
-                    }
+                    target.check_dm_target()?;
                     targets.push(target);
                 }
                 if !approval.confirm(prompt, "Open or create this group DM?", || {

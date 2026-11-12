@@ -1,7 +1,8 @@
-use super::{channel_text, identity_text, page_text, terminal_text, user_text};
+use super::users::user_text;
+use super::{channel_text, identity_text, page_text, terminal_text};
 use crate::auth::ProfileView;
+use crate::model::users::User;
 use crate::slack::{ChannelDetails, ConversationAction, OpenedGroup, Page};
-use crate::users::User;
 use serde::Serialize;
 use slack_morphism::{SlackChannelId, SlackTeamInfo, SlackUserId};
 

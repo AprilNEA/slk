@@ -1,3 +1,4 @@
+use crate::error::{Error, Result};
 use serde::{Deserialize, Serialize};
 use slack_morphism::{SlackChannelId, SlackTeamId, SlackUserId};
 
@@ -36,6 +37,14 @@ impl User {
             }))
             .flatten()
             .any(|candidate| candidate.eq_ignore_ascii_case(name))
+    }
+
+    /// Rejects deactivated accounts, bots, and apps as members of a DM or group DM.
+    pub(crate) fn check_dm_target(&self) -> Result<()> {
+        if self.deleted || self.is_bot || self.is_app_user {
+            return Err(Error::DmTarget);
+        }
+        Ok(())
     }
 }
 

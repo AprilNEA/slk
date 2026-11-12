@@ -48,8 +48,8 @@ fn slack_server(api: &MockServer) -> impl rmcp::ServerHandler + Clone {
                         prepared.execute(connect(profile).await?, &Terminal).await
                     }
                     Command::Users(command) => {
-                        let (profile, prepared) = command.prepare(store, selected, cli.json)?;
-                        prepared.execute(connect(profile).await?, &Terminal).await
+                        let (profile, request) = command.prepare(store, selected, cli.json)?;
+                        request.execute(connect(profile).await?, &Terminal).await
                     }
                     Command::Conversations(command) => {
                         let (profile, prepared) = command.prepare(store, selected, cli.json)?;

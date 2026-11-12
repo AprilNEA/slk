@@ -1,8 +1,8 @@
-use super::{Output, terminal_text};
+use super::{Output, terminal_text, users};
 use crate::auth::{Identity, Kind, ProfileView, Workspace};
 use crate::messages::{Change, Message, MessageText};
+use crate::model::users::User;
 use crate::slack::{Channel, Page, Pagination, Resolution, ResolutionStatus};
-use crate::users::User;
 use serde_json::{Value, json};
 use slack_morphism::SlackConversationType;
 
@@ -179,12 +179,12 @@ fn user_output_keeps_account_flags_candidates_and_paging_after_untrusted_fields(
             },
         };
         let output = if resolved {
-            Output::ResolvedUsers(Resolution {
+            Output::Users(users::Output::ResolvedUsers(Resolution {
                 status: ResolutionStatus::Ambiguous,
                 candidates: page,
-            })
+            }))
         } else {
-            Output::Users(page)
+            Output::Users(users::Output::Users(page))
         };
         let mut text = Vec::new();
         output.write(false, &mut text).unwrap();
@@ -246,14 +246,14 @@ fn write_previews_preserve_actions_and_targets_after_unterminated_sequences() {
             permalink: None,
         };
         let output = if action == "dm" {
-            Output::DmPreview {
+            Output::Users(users::Output::DmPreview {
                 dry_run: true,
                 profile,
                 target: serde_json::from_value(
                     json!({"id": "U7", "name": "Alice\u{001b}]0;discarded name"}),
                 )
                 .unwrap(),
-            }
+            })
         } else {
             let change = match action {
                 "edit" => Change::Edit {

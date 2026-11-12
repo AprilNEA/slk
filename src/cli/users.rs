@@ -1,13 +1,11 @@
 use super::Paging;
 use super::write::WriteOptions;
-use crate::app::{Approval, Connection, Prompt};
+use crate::app::{self, users::Request};
 use crate::auth::{ProfileView, Store};
 use crate::error::{Error, Result};
 use crate::ids::parse_user;
-use crate::output::{self, Output};
-use crate::slack::CursorPage;
 use clap::{Subcommand, ValueEnum};
-use slack_morphism::{SlackClientHttpConnector, SlackUserId};
+use slack_morphism::SlackUserId;
 
 #[derive(Subcommand)]
 pub(super) enum UserCommand {
@@ -55,32 +53,13 @@ pub(super) enum ResolveKind {
     Channel,
 }
 
-enum Request {
-    List(CursorPage),
-    Info(SlackUserId),
-    Lookup(String),
-    Resolve {
-        kind: ResolveKind,
-        name: String,
-        page: CursorPage,
-    },
-    Dm {
-        user: SlackUserId,
-        approval: Approval,
-    },
-}
-
-pub(super) struct Prepared {
-    request: Request,
-}
-
 impl UserCommand {
     pub(super) fn prepare(
         self,
         store: &Store,
         selected: Option<&str>,
         json: bool,
-    ) -> Result<(ProfileView, Prepared)> {
+    ) -> Result<(ProfileView, app::Request)> {
         let selection = match &self {
             Self::Users { selector, .. } => selector.resolve(store, selected)?,
             _ => selected.map(str::to_owned),
@@ -111,10 +90,10 @@ impl UserCommand {
                         "Provide a nonempty name without controls.",
                     ));
                 }
-                Request::Resolve {
-                    kind,
-                    name,
-                    page: paging.resolve(store.settings()),
+                let page = paging.resolve(store.settings());
+                match kind {
+                    ResolveKind::User => Request::Resolve { name, page },
+                    ResolveKind::Channel => Request::ResolveChannel { name, page },
                 }
             }
             Self::Dm { user, options } => Request::Dm {
@@ -122,66 +101,7 @@ impl UserCommand {
                 approval: options.prepare(selected.is_some(), json)?,
             },
         };
-        Ok((profile, Prepared { request }))
-    }
-}
-
-impl Prepared {
-    pub(super) async fn execute<C: SlackClientHttpConnector + Send + Sync>(
-        self,
-        connection: Connection<C>,
-        prompt: &dyn Prompt,
-    ) -> Result<Output> {
-        let Connection {
-            slack,
-            credentials,
-            profile,
-        } = connection;
-        let credentials = &credentials;
-        match self.request {
-            Request::List(page) => slack.users(credentials, &page).await.map(Output::Users),
-            Request::Info(user) => slack.user(credentials, &user).await.map(Output::User),
-            Request::Lookup(email) => slack
-                .user_by_email(credentials, &email)
-                .await
-                .map(Output::User),
-            Request::Resolve { kind, name, page } => match kind {
-                ResolveKind::User => {
-                    let mut candidates = slack.users(credentials, &page).await?;
-                    candidates.data.retain(|user| user.matches_name(&name));
-                    Ok(Output::ResolvedUsers(candidates.resolve(&page)))
-                }
-                ResolveKind::Channel => {
-                    let mut candidates = slack.channels(credentials, &page).await?;
-                    candidates.data.retain(|channel| {
-                        channel
-                            .name
-                            .as_ref()
-                            .is_some_and(|candidate| candidate.eq_ignore_ascii_case(&name))
-                    });
-                    Ok(Output::ResolvedChannels(candidates.resolve(&page)))
-                }
-            },
-            Request::Dm { user, approval } => {
-                let target = slack.user(credentials, &user).await?;
-                if target.deleted || target.is_bot || target.is_app_user {
-                    return Err(Error::DmTarget);
-                }
-                if !approval.confirm(prompt, "Open or create this DM?", || {
-                    output::dm_preview_text(&profile, &target)
-                })? {
-                    return Ok(Output::DmPreview {
-                        dry_run: true,
-                        profile,
-                        target,
-                    });
-                }
-                slack
-                    .open_dm(credentials, &target.user_id)
-                    .await
-                    .map(Output::DmOpened)
-            }
-        }
+        Ok((profile, app::Request::Users(request)))
     }
 }
 
