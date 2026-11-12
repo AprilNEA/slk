@@ -152,14 +152,13 @@ impl MessageCommand {
             | Self::Get { .. }
             | Self::Thread { .. }
             | Self::Pins { .. } => Effect::Read,
-            Self::Send { .. }
-            | Self::Reply { .. }
-            | Self::Edit { .. }
-            | Self::Delete { .. }
-            | Self::React { .. }
-            | Self::Unreact { .. }
-            | Self::Pin { .. }
-            | Self::Unpin { .. } => Effect::Write,
+            Self::Send { input, .. } | Self::Reply { input, .. } => input.input.options.effect(),
+            Self::Edit { input, .. } => input.options.effect(),
+            Self::Delete { options, .. }
+            | Self::React { options, .. }
+            | Self::Unreact { options, .. }
+            | Self::Pin { options, .. }
+            | Self::Unpin { options, .. } => options.effect(),
         }
     }
 

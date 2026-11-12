@@ -61,7 +61,8 @@ impl ScheduledCommand {
     pub(super) fn effect(&self) -> Effect {
         match self {
             Self::List { .. } => Effect::Read,
-            Self::Create { .. } | Self::Reply { .. } | Self::Cancel { .. } => Effect::Write,
+            Self::Create { input, .. } | Self::Reply { input, .. } => input.input.options.effect(),
+            Self::Cancel { options, .. } => options.effect(),
         }
     }
 

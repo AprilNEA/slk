@@ -62,7 +62,7 @@ impl UserCommand {
                 }
             },
             Self::Resolve { .. } => Effect::Read,
-            Self::Dm { .. } => Effect::Write,
+            Self::Dm { options, .. } => options.effect(),
         }
     }
 

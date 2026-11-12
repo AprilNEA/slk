@@ -189,11 +189,10 @@ impl Command {
                 },
             },
             Self::Messages { command, .. } => match command {
-                Message::Send { .. }
-                | Message::Edit { .. }
-                | Message::Delete { .. }
-                | Message::React { .. }
-                | Message::Unreact { .. } => Effect::Write,
+                Message::Send { body, .. } | Message::Edit { body, .. } => body.options.effect(),
+                Message::Delete { options, .. }
+                | Message::React { options, .. }
+                | Message::Unreact { options, .. } => options.effect(),
             },
         }
     }

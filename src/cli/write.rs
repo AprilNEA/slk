@@ -1,9 +1,9 @@
-use super::FilePath;
+use super::{Effect, FilePath};
 use crate::app::{Approval, Prompt};
 use crate::auth::Settings;
 use crate::error::{Error, Result};
 use crate::model::messages::{Content, MAX_TEXT_CHARS, MessageText, Split};
-use clap::{ArgGroup, ArgMatches, Args};
+use clap::{ArgGroup, Args};
 use std::fs;
 use std::io::{self, IsTerminal, Read, Write};
 use std::path::{Path, PathBuf};
@@ -56,9 +56,13 @@ pub(super) struct WriteOptions {
 }
 
 impl WriteOptions {
-    /// Whether `matches`, the innermost subcommand's matches, set `--dry-run`.
-    pub(super) fn previews(matches: &ArgMatches) -> bool {
-        matches.try_get_one::<bool>("dry_run").ok().flatten() == Some(&true)
+    /// The effect of the write command that carries these options.
+    pub(super) fn effect(&self) -> Effect {
+        if self.dry_run {
+            Effect::Preview
+        } else {
+            Effect::Write
+        }
     }
 
     pub(super) fn prepare(self, explicit_profile: bool, json: bool) -> Result<Approval> {

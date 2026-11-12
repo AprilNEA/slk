@@ -83,8 +83,10 @@ enum Command {
 enum Effect {
     /// Reads Slack or local profile state.
     Read,
-    /// Changes Slack state, or previews that change with `--dry-run`.
+    /// Changes Slack state.
     Write,
+    /// Verifies a write and its target with `--dry-run`, without making the write request.
+    Preview,
     /// Writes a Slack-hosted file to a local path.
     Download,
     /// Manages credentials, the executable, or a server; no MCP tool accepts the command.

@@ -109,17 +109,18 @@ impl ConversationCommand {
             Self::Channels(_) | Self::Unread(_) | Self::Workspace => Effect::Read,
             Self::Channel { command } => match command {
                 ChannelCommand::Info { .. } | ChannelCommand::Members { .. } => Effect::Read,
-                ChannelCommand::Create { .. }
-                | ChannelCommand::Join(_)
-                | ChannelCommand::Leave(_)
-                | ChannelCommand::Archive(_)
-                | ChannelCommand::Topic { .. }
-                | ChannelCommand::Mark { .. } => Effect::Write,
+                ChannelCommand::Create { options, .. } => options.effect(),
+                ChannelCommand::Join(target)
+                | ChannelCommand::Leave(target)
+                | ChannelCommand::Archive(target)
+                | ChannelCommand::Topic { target, .. }
+                | ChannelCommand::Mark { target, .. } => target.options.effect(),
             },
             Self::GroupDm { command } => match command {
                 GroupCommand::List(_) => Effect::Read,
-                GroupCommand::Open { .. } | GroupCommand::Resume(_) | GroupCommand::Close(_) => {
-                    Effect::Write
+                GroupCommand::Open { options, .. } => options.effect(),
+                GroupCommand::Resume(target) | GroupCommand::Close(target) => {
+                    target.options.effect()
                 }
             },
         }

@@ -81,12 +81,11 @@ impl CanvasCommand {
     pub(super) fn effect(&self) -> Effect {
         match self {
             Self::Read { .. } | Self::Sections { .. } => Effect::Read,
-            Self::Append(_)
-            | Self::Prepend(_)
-            | Self::InsertBefore(_)
-            | Self::InsertAfter(_)
-            | Self::ReplaceSection(_)
-            | Self::DeleteSection { .. } => Effect::Write,
+            Self::Append(input) | Self::Prepend(input) => input.options.effect(),
+            Self::InsertBefore(input) | Self::InsertAfter(input) | Self::ReplaceSection(input) => {
+                input.input.options.effect()
+            }
+            Self::DeleteSection { options, .. } => options.effect(),
         }
     }
 

@@ -1,5 +1,4 @@
 use crate::cli::store::Selector;
-use crate::cli::write::WriteOptions;
 use crate::cli::{Cli, Effect, FilePath};
 use crate::error::{Error, Result};
 use crate::output::Output;
@@ -20,7 +19,7 @@ pub(super) struct Request {
 
 impl Request {
     pub(super) fn read(profile: &str, args: Vec<String>) -> Result<Self> {
-        let (cli, _) = parse(profile, args)?;
+        let cli = parse(profile, args)?;
         if !matches!(cli.command.effect(), Effect::Read) {
             return Err(Error::Arguments(
                 "MCP accepts read-only commands. Writes, previews, file transfers, authentication changes, and nested servers are unavailable.",
@@ -38,10 +37,10 @@ impl Request {
         args: Vec<String>,
         files: BTreeMap<String, String>,
     ) -> Result<Self> {
-        let (mut cli, preview) = parse(profile, args)?;
+        let mut cli = parse(profile, args)?;
         let mutating = match cli.command.effect() {
-            Effect::Write => !preview,
-            Effect::Download => false,
+            Effect::Write => true,
+            Effect::Preview | Effect::Download => false,
             Effect::Read | Effect::CliOnly => {
                 return Err(Error::Arguments(
                     "slk_write accepts Slack writes, previews, and file transfers only. Use slk_read for reads; manage authentication and the server separately.",
@@ -128,7 +127,7 @@ impl Request {
     }
 }
 
-fn parse(profile: &str, args: Vec<String>) -> Result<(Cli, bool)> {
+fn parse(profile: &str, args: Vec<String>) -> Result<Cli> {
     let invalid = |_| {
         Error::Arguments(
             "Invalid command arguments. Use slk_help; never supply credentials in tool arguments.",
@@ -147,10 +146,9 @@ fn parse(profile: &str, args: Vec<String>) -> Result<(Cli, bool)> {
             "MCP tools cannot select or override a profile. Configure a separate server for another identity.",
         ));
     }
-    let preview = WriteOptions::previews(command);
     cli.profile = Some(profile.to_owned());
     cli.json = true;
-    Ok((cli, preview))
+    Ok(cli)
 }
 
 fn filename(path: &Path) -> Result<&str> {

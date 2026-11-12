@@ -37,7 +37,7 @@ impl FileCommand {
     pub(super) fn effect(&self) -> Effect {
         match self {
             Self::Info { .. } => Effect::Read,
-            Self::Upload { .. } => Effect::Write,
+            Self::Upload { options, .. } => options.effect(),
             Self::Download { .. } => Effect::Download,
         }
     }
