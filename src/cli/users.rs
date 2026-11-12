@@ -1,10 +1,11 @@
 use super::Paging;
-use super::write::{Approval, WriteOptions};
-use crate::auth::{Credentials, ProfileView, Store};
+use super::write::WriteOptions;
+use crate::app::{Approval, Connection, Prompt};
+use crate::auth::{ProfileView, Store};
 use crate::error::{Error, Result};
 use crate::ids::parse_user;
 use crate::output::{self, Output};
-use crate::slack::{CursorPage, Slack};
+use crate::slack::CursorPage;
 use clap::{Subcommand, ValueEnum};
 use slack_morphism::{SlackClientHttpConnector, SlackUserId};
 
@@ -70,7 +71,6 @@ enum Request {
 }
 
 pub(super) struct Prepared {
-    pub profile: ProfileView,
     request: Request,
 }
 
@@ -80,7 +80,7 @@ impl UserCommand {
         store: &Store,
         selected: Option<&str>,
         json: bool,
-    ) -> Result<Prepared> {
+    ) -> Result<(ProfileView, Prepared)> {
         let selection = match &self {
             Self::Users { selector, .. } => selector.resolve(store, selected)?,
             _ => selected.map(str::to_owned),
@@ -122,19 +122,22 @@ impl UserCommand {
                 approval: options.prepare(selected.is_some(), json)?,
             },
         };
-        Ok(Prepared { profile, request })
+        Ok((profile, Prepared { request }))
     }
 }
 
 impl Prepared {
     pub(super) async fn execute<C: SlackClientHttpConnector + Send + Sync>(
         self,
-        slack: &Slack<C>,
-        credentials: &Credentials,
+        connection: Connection<C>,
+        prompt: &dyn Prompt,
     ) -> Result<Output> {
-        if slack.identify(credentials).await? != self.profile.identity {
-            return Err(Error::IdentityMismatch);
-        }
+        let Connection {
+            slack,
+            credentials,
+            profile,
+        } = connection;
+        let credentials = &credentials;
         match self.request {
             Request::List(page) => slack.users(credentials, &page).await.map(Output::Users),
             Request::Info(user) => slack.user(credentials, &user).await.map(Output::User),
@@ -164,12 +167,12 @@ impl Prepared {
                 if target.deleted || target.is_bot || target.is_app_user {
                     return Err(Error::DmTarget);
                 }
-                if !approval.confirm("Open or create this DM?", || {
-                    output::dm_preview_text(&self.profile, &target)
+                if !approval.confirm(prompt, "Open or create this DM?", || {
+                    output::dm_preview_text(&profile, &target)
                 })? {
                     return Ok(Output::DmPreview {
                         dry_run: true,
-                        profile: self.profile,
+                        profile,
                         target,
                     });
                 }

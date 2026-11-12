@@ -1,7 +1,9 @@
 use super::Prepared;
-use crate::auth::{Credentials, Kind, Store};
-use crate::cli::{Cli, Command};
+use crate::app::Connection;
+use crate::auth::{Credentials, Kind, ProfileView, Store};
+use crate::cli::{Cli, Command, write::Terminal};
 use crate::error::Result;
+use crate::output::Output;
 use crate::testing::{self, auth_response, client};
 use clap::{CommandFactory, Parser};
 use serde_json::{Value, json};
@@ -18,12 +20,21 @@ fn store() -> Store {
     }).to_string()).unwrap()
 }
 
-fn prepare(args: &[&str], store: &Store) -> Result<Prepared> {
+fn prepare(args: &[&str], store: &Store) -> Result<(ProfileView, Prepared)> {
     let cli = Cli::try_parse_from(std::iter::once("slk").chain(args.iter().copied())).unwrap();
     let Command::Compatibility(command) = cli.command else {
         panic!("expected a compatibility command");
     };
     command.prepare(store, cli.profile.as_deref(), cli.json)
+}
+
+async fn execute(
+    (profile, prepared): (ProfileView, Prepared),
+    server: &MockServer,
+    credentials: &Credentials,
+) -> Result<Output> {
+    let connection = Connection::verify(client(server), credentials.clone(), profile).await?;
+    prepared.execute(connection, &Terminal).await
 }
 
 #[test]
@@ -263,9 +274,7 @@ async fn message_adapters_preserve_exact_targets_verified_threads_and_body_files
         vec!["conversations", "get", "C1", "1700000000000001"],
     ] {
         let value = serde_json::to_value(
-            prepare(&args, &store)
-                .unwrap()
-                .execute(&client(&server), &credentials)
+            execute(prepare(&args, &store).unwrap(), &server, &credentials)
                 .await
                 .unwrap(),
         )
@@ -304,23 +313,26 @@ async fn message_adapters_preserve_exact_targets_verified_threads_and_body_files
             "ok": true, "channel": "C1", "ts": "1700000000.000010", "message": {"thread_ts": "1700000000.000001"}
         })))
         .expect(1).mount(&server).await;
-    let result = prepare(
-        &[
-            "messages",
-            "send",
-            "--permalink",
-            link,
-            "--message",
-            "approved reply",
-            "--workspace",
-            "T12345678",
-            "--yes",
-            "--json",
-        ],
-        &store,
+    let result = execute(
+        prepare(
+            &[
+                "messages",
+                "send",
+                "--permalink",
+                link,
+                "--message",
+                "approved reply",
+                "--workspace",
+                "T12345678",
+                "--yes",
+                "--json",
+            ],
+            &store,
+        )
+        .unwrap(),
+        &server,
+        &credentials,
     )
-    .unwrap()
-    .execute(&client(&server), &credentials)
     .await
     .unwrap();
     let result = serde_json::to_value(result).unwrap();
@@ -421,11 +433,13 @@ async fn compatibility_history_is_chronological_and_search_keeps_native_queries(
     let store = store();
     let credentials = store.credentials("work").unwrap();
     let value = serde_json::to_value(
-        prepare(&["conversations", "read", "C1"], &store)
-            .unwrap()
-            .execute(&client(&server), &credentials)
-            .await
-            .unwrap(),
+        execute(
+            prepare(&["conversations", "read", "C1"], &store).unwrap(),
+            &server,
+            &credentials,
+        )
+        .await
+        .unwrap(),
     )
     .unwrap();
     assert_eq!(value["data"][0]["ts"], "1700000000.000002");
@@ -439,12 +453,11 @@ async fn compatibility_history_is_chronological_and_search_keeps_native_queries(
         let Command::Messages(command) = cli.command else {
             panic!("expected search")
         };
-        command
-            .prepare(&store, None, true)
-            .unwrap()
-            .execute(&client(&server), &credentials)
+        let (profile, prepared) = command.prepare(&store, None, true).unwrap();
+        let connection = Connection::verify(client(&server), credentials.clone(), profile)
             .await
             .unwrap();
+        prepared.execute(connection, &Terminal).await.unwrap();
     }
     let queries = server
         .received_requests()

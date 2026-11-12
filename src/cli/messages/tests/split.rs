@@ -1,6 +1,6 @@
-use super::prepare;
+use super::{execute, prepare};
 use crate::auth::{Credentials, Kind};
-use crate::testing::{auth_response, client};
+use crate::testing::auth_response;
 use serde_json::{Value, json};
 use wiremock::matchers::path;
 use wiremock::{Mock, MockServer, ResponseTemplate};
@@ -15,21 +15,24 @@ async fn split_preview_preserves_unicode_and_whitespace_without_writes() {
         .await;
     let credentials = Credentials::parse(Kind::User, r#"{"token":"xoxp-test"}"#).unwrap();
     let text = "  Hello 🦀!\n\n日本語 and a second sentence.\n".repeat(3);
-    let result = prepare(
-        &[
-            "send",
-            "C1",
-            "--text",
-            &text,
-            "--split",
-            "--chunk-chars",
-            "48",
-            "--dry-run",
-        ],
-        Kind::User,
+    let result = execute(
+        prepare(
+            &[
+                "send",
+                "C1",
+                "--text",
+                &text,
+                "--split",
+                "--chunk-chars",
+                "48",
+                "--dry-run",
+            ],
+            Kind::User,
+        )
+        .unwrap(),
+        &server,
+        &credentials,
     )
-    .unwrap()
-    .execute(&client(&server), &credentials)
     .await
     .unwrap();
     let value = serde_json::to_value(result).unwrap();
@@ -128,10 +131,7 @@ async fn split_sends_are_ordered_and_stop_with_confirmed_receipts_on_failure() {
                 "work",
                 "--yes",
             ];
-            let result = prepare(&args, Kind::User)
-                .unwrap()
-                .execute(&client(&server), &credentials)
-                .await;
+            let result = execute(prepare(&args, Kind::User).unwrap(), &server, &credentials).await;
             if let Some(code) = failure {
                 let error = match result {
                     Ok(_) => panic!("the second chunk must fail"),

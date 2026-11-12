@@ -1,4 +1,5 @@
-use super::{cancellation, compat, session::SessionSource};
+use super::{compat, session::SessionSource};
+use crate::app::{Connection, cancellation};
 use crate::auth::{Credentials, Kind, Realm, Store, Workspace, browser, oauth};
 use crate::error::{Error, Result};
 use crate::output::Output;
@@ -198,17 +199,8 @@ impl AuthCommand {
             Self::Status { selector } => {
                 let selected = selector.resolve(store, profile.as_deref())?;
                 let profile = store.select(selected.as_deref())?;
-                let credentials = store.credentials(&profile.profile)?;
-                let slack = Slack::connect(
-                    credentials.realm(),
-                    credentials.workspace(),
-                    store.settings(),
-                )?;
-                let identity = slack.identify(&credentials).await?;
-                if identity != profile.identity {
-                    return Err(Error::IdentityMismatch);
-                }
-                Ok(Output::Profile(profile))
+                let connection = Connection::open(store, profile).await?;
+                Ok(Output::Profile(connection.into_profile()))
             }
             Self::Logout => {
                 let name =

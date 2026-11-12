@@ -1,12 +1,10 @@
-use super::{
-    Paging,
-    write::{Approval, WriteOptions},
-};
-use crate::auth::{Credentials, ProfileView, Store};
+use super::{Paging, write::WriteOptions};
+use crate::app::{Approval, Connection, Prompt};
+use crate::auth::{ProfileView, Store};
 use crate::error::{Error, Result};
 use crate::ids::{parse_channel, parse_timestamp, parse_user};
 use crate::output::{Output, conversations as output};
-use crate::slack::{ConversationAction, CursorPage, Slack};
+use crate::slack::{ConversationAction, CursorPage};
 use clap::{Args, Subcommand, ValueEnum};
 use slack_morphism::{
     SlackChannelId, SlackClientHttpConnector, SlackConversationType, SlackTs, SlackUserId,
@@ -133,7 +131,6 @@ enum Request {
 }
 
 pub(super) struct Prepared {
-    pub profile: ProfileView,
     request: Request,
 }
 
@@ -143,7 +140,7 @@ impl ConversationCommand {
         store: &Store,
         selected: Option<&str>,
         json: bool,
-    ) -> Result<Prepared> {
+    ) -> Result<(ProfileView, Prepared)> {
         let profile = store.select(selected)?;
         let change = |target: ChangeTarget, action| -> Result<Request> {
             Ok(Request::Change {
@@ -227,19 +224,22 @@ impl ConversationCommand {
             },
             Self::Workspace => Request::Workspace,
         };
-        Ok(Prepared { profile, request })
+        Ok((profile, Prepared { request }))
     }
 }
 
 impl Prepared {
     pub(super) async fn execute<C: SlackClientHttpConnector + Send + Sync>(
         self,
-        slack: &Slack<C>,
-        credentials: &Credentials,
+        connection: Connection<C>,
+        prompt: &dyn Prompt,
     ) -> Result<Output> {
-        if slack.identify(credentials).await? != self.profile.identity {
-            return Err(Error::IdentityMismatch);
-        }
+        let Connection {
+            slack,
+            credentials,
+            profile,
+        } = connection;
+        let credentials = &credentials;
         let result = match self.request {
             Request::Info(channel) => {
                 output::Output::Info(slack.channel_info(credentials, &channel).await?)
@@ -253,7 +253,7 @@ impl Prepared {
             }
             Request::Workspace => output::Output::Workspace(
                 slack
-                    .workspace_info(credentials, &self.profile.identity.team_id)
+                    .workspace_info(credentials, &profile.identity.team_id)
                     .await?,
             ),
             Request::Create {
@@ -261,12 +261,12 @@ impl Prepared {
                 is_private,
                 approval,
             } => {
-                if !approval.confirm("Create this channel?", || {
-                    output::create_preview(&self.profile, &name, is_private)
+                if !approval.confirm(prompt, "Create this channel?", || {
+                    output::create_preview(&profile, &name, is_private)
                 })? {
                     output::Output::CreatePreview {
                         dry_run: true,
-                        profile: self.profile,
+                        profile,
                         name,
                         is_private,
                     }
@@ -283,12 +283,12 @@ impl Prepared {
             } => {
                 let before = slack.channel_info(credentials, &channel).await?;
                 action.validate(&before)?;
-                if !approval.confirm("Apply this conversation change?", || {
-                    output::change_preview(&self.profile, &before, &action)
+                if !approval.confirm(prompt, "Apply this conversation change?", || {
+                    output::change_preview(&profile, &before, &action)
                 })? {
                     output::Output::ChangePreview {
                         dry_run: true,
-                        profile: self.profile,
+                        profile,
                         before,
                         action,
                     }
@@ -311,12 +311,12 @@ impl Prepared {
                     }
                     targets.push(target);
                 }
-                if !approval.confirm("Open or create this group DM?", || {
-                    output::group_preview(&self.profile, &targets)
+                if !approval.confirm(prompt, "Open or create this group DM?", || {
+                    output::group_preview(&profile, &targets)
                 })? {
                     output::Output::GroupPreview {
                         dry_run: true,
-                        profile: self.profile,
+                        profile,
                         targets,
                     }
                 } else {

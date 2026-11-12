@@ -1,15 +1,16 @@
 use super::{
     Paging,
     messages::{Destination, Target},
-    write::{Approval, WriteInput, WriteOptions},
+    write::{WriteInput, WriteOptions},
 };
-use crate::auth::{Credentials, ProfileView, Store};
+use crate::app::{Approval, Connection, Prompt};
+use crate::auth::{ProfileView, Store};
 use crate::error::{Error, Result};
 use crate::ids::{parse_channel, parse_scheduled_message};
 use crate::messages::Content;
 use crate::output::{self, Output};
 use crate::scheduled::validate_time;
-use crate::slack::{CursorPage, Slack};
+use crate::slack::CursorPage;
 use chrono::{DateTime, FixedOffset, Utc};
 use clap::{Args, Subcommand};
 use slack_morphism::{SlackChannelId, SlackClientHttpConnector};
@@ -79,7 +80,6 @@ enum Request {
 }
 
 pub(super) struct Prepared {
-    pub profile: ProfileView,
     request: Request,
 }
 
@@ -89,7 +89,7 @@ impl ScheduledCommand {
         store: &Store,
         selected: Option<&str>,
         json: bool,
-    ) -> Result<Prepared> {
+    ) -> Result<(ProfileView, Prepared)> {
         let profile = store.select(selected)?;
         let request = match self {
             Self::Create {
@@ -135,19 +135,22 @@ impl ScheduledCommand {
                 approval: options.prepare(selected.is_some(), json)?,
             },
         };
-        Ok(Prepared { profile, request })
+        Ok((profile, Prepared { request }))
     }
 }
 
 impl Prepared {
     pub(super) async fn execute<C: SlackClientHttpConnector + Send + Sync>(
         self,
-        slack: &Slack<C>,
-        credentials: &Credentials,
+        connection: Connection<C>,
+        prompt: &dyn Prompt,
     ) -> Result<Output> {
-        if slack.identify(credentials).await? != self.profile.identity {
-            return Err(Error::IdentityMismatch);
-        }
+        let Connection {
+            slack,
+            credentials,
+            profile,
+        } = connection;
+        let credentials = &credentials;
         match self.request {
             Request::Create {
                 destination,
@@ -155,14 +158,14 @@ impl Prepared {
                 content,
                 approval,
             } => {
-                let draft = destination.draft(slack, credentials, content).await?;
+                let draft = destination.draft(&slack, credentials, content).await?;
                 let post_at = validate_time(at, Utc::now())?;
-                if !approval.confirm("Schedule this message?", || {
-                    output::schedule_preview_text(&self.profile, &draft, post_at)
+                if !approval.confirm(prompt, "Schedule this message?", || {
+                    output::schedule_preview_text(&profile, &draft, post_at)
                 })? {
                     return Ok(Output::SchedulePreview {
                         dry_run: true,
-                        profile: self.profile,
+                        profile,
                         draft,
                         post_at,
                     });
@@ -192,12 +195,12 @@ impl Prepared {
                 if matches.next().is_some() {
                     return Err(Error::Response);
                 }
-                if !approval.confirm("Cancel this scheduled message?", || {
-                    output::cancel_preview_text(&self.profile, &scheduled)
+                if !approval.confirm(prompt, "Cancel this scheduled message?", || {
+                    output::cancel_preview_text(&profile, &scheduled)
                 })? {
                     return Ok(Output::ScheduleCancellationPreview {
                         dry_run: true,
-                        profile: self.profile,
+                        profile,
                         scheduled,
                     });
                 }

@@ -1,5 +1,6 @@
-use super::write::{Approval, SendInput, WriteInput, WriteOptions};
+use super::write::{SendInput, WriteInput, WriteOptions};
 use super::{Paging, Traversal};
+use crate::app::{Approval, Connection, Prompt};
 use crate::auth::{Credentials, ProfileView, Store};
 use crate::error::{Error, Result};
 use crate::ids::{parse_channel, parse_timestamp};
@@ -199,7 +200,6 @@ enum Request {
 }
 
 pub(super) struct Prepared {
-    pub profile: ProfileView,
     request: Request,
 }
 
@@ -209,7 +209,7 @@ impl MessageCommand {
         store: &Store,
         selected: Option<&str>,
         json: bool,
-    ) -> Result<Prepared> {
+    ) -> Result<(ProfileView, Prepared)> {
         let selection = match &self {
             Self::Search { selector, .. } => selector.resolve(store, selected)?,
             _ => selected.map(str::to_owned),
@@ -346,19 +346,22 @@ impl MessageCommand {
                 }
             }
         };
-        Ok(Prepared { profile, request })
+        Ok((profile, Prepared { request }))
     }
 }
 
 impl Prepared {
     pub(super) async fn execute<C: SlackClientHttpConnector + Send + Sync>(
         self,
-        slack: &Slack<C>,
-        credentials: &Credentials,
+        connection: Connection<C>,
+        prompt: &dyn Prompt,
     ) -> Result<Output> {
-        if slack.identify(credentials).await? != self.profile.identity {
-            return Err(Error::IdentityMismatch);
-        }
+        let Connection {
+            slack,
+            credentials,
+            profile,
+        } = connection;
+        let credentials = &credentials;
         match self.request {
             Request::Channels(page) => slack
                 .channels(credentials, &page)
@@ -405,7 +408,7 @@ impl Prepared {
                 let first = content
                     .next()
                     .expect("validated input contains at least one chunk");
-                let first = destination.draft(slack, credentials, first).await?;
+                let first = destination.draft(&slack, credentials, first).await?;
                 let mut drafts = vec![first];
                 for content in content {
                     drafts.push(Draft {
@@ -414,19 +417,19 @@ impl Prepared {
                         content,
                     });
                 }
-                if !approval.confirm("Send these messages in order?", || {
-                    output::messages::batch_preview_text(&self.profile, &drafts)
+                if !approval.confirm(prompt, "Send these messages in order?", || {
+                    output::messages::batch_preview_text(&profile, &drafts)
                 })? {
                     return Ok(if drafts.len() == 1 {
                         Output::Preview {
                             dry_run: true,
-                            profile: self.profile,
+                            profile,
                             draft: drafts.pop().expect("one preview remains"),
                         }
                     } else {
                         Output::BatchPreview {
                             dry_run: true,
-                            profile: self.profile,
+                            profile,
                             drafts,
                         }
                     });
@@ -461,14 +464,14 @@ impl Prepared {
                 let inspected = slack
                     .message(credentials, &target.message_url, target.thread.as_ref())
                     .await?;
-                change.validate(&inspected, &self.profile.identity)?;
+                change.validate(&inspected, &profile.identity)?;
                 let message = inspected.message;
-                if !approval.confirm("Apply this change?", || {
-                    output::messages::change_preview_text(&self.profile, &message, &change)
+                if !approval.confirm(prompt, "Apply this change?", || {
+                    output::messages::change_preview_text(&profile, &message, &change)
                 })? {
                     return Ok(Output::ChangePreview {
                         dry_run: true,
-                        profile: self.profile,
+                        profile,
                         message,
                         change,
                     });

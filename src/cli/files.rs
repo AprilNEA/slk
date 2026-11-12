@@ -1,10 +1,10 @@
-use super::write::{Approval, WriteOptions};
-use crate::auth::{Credentials, FileSettings, ProfileView, Store};
+use super::write::WriteOptions;
+use crate::app::{Approval, Connection, Prompt, cancellation};
+use crate::auth::{FileSettings, ProfileView, Store};
 use crate::error::{Error, Result};
 use crate::files::{Transfer, Upload};
 use crate::ids::{parse_channel, parse_file};
 use crate::output::{self, Output};
-use crate::slack::Slack;
 use clap::Subcommand;
 use slack_morphism::{SlackChannelId, SlackClientHttpConnector, SlackFileId};
 use std::path::PathBuf;
@@ -47,7 +47,6 @@ enum Request {
 }
 
 pub(super) struct Prepared {
-    pub profile: ProfileView,
     request: Request,
     settings: FileSettings,
 }
@@ -58,7 +57,7 @@ impl FileCommand {
         store: &Store,
         selected: Option<&str>,
         json: bool,
-    ) -> Result<Prepared> {
+    ) -> Result<(ProfileView, Prepared)> {
         let profile = store.select(selected)?;
         let settings = store.settings().files.clone();
         let request = match self {
@@ -87,23 +86,22 @@ impl FileCommand {
                 Request::Download { file, output }
             }
         };
-        Ok(Prepared {
-            profile,
-            request,
-            settings,
-        })
+        Ok((profile, Prepared { request, settings }))
     }
 }
 
 impl Prepared {
     pub(super) async fn execute<C: SlackClientHttpConnector + Send + Sync>(
         self,
-        slack: &Slack<C>,
-        credentials: &Credentials,
+        connection: Connection<C>,
+        prompt: &dyn Prompt,
     ) -> Result<Output> {
-        if slack.identify(credentials).await? != self.profile.identity {
-            return Err(Error::IdentityMismatch);
-        }
+        let Connection {
+            slack,
+            credentials,
+            profile,
+        } = connection;
+        let credentials = &credentials;
         match self.request {
             Request::Info(id) => slack.file(credentials, &id).await.map(Output::File),
             Request::Upload {
@@ -112,19 +110,19 @@ impl Prepared {
                 approval,
             } => {
                 let size = upload.content.len() as u64;
-                if !approval.confirm("Upload and share this file as shown?", || {
-                    output::upload_preview_text(&self.profile, &upload.name, size, channel.as_ref())
+                if !approval.confirm(prompt, "Upload and share this file as shown?", || {
+                    output::upload_preview_text(&profile, &upload.name, size, channel.as_ref())
                 })? {
                     return Ok(Output::UploadPreview {
                         dry_run: true,
-                        profile: self.profile,
+                        profile,
                         filename: upload.name,
                         size,
                         channel_id: channel,
                     });
                 }
                 let transfer = Transfer::new(&self.settings)?;
-                let cancelled = super::cancellation()?;
+                let cancelled = cancellation()?;
                 let file = tokio::select! {
                     biased;
                     () = cancelled => return Err(Error::WriteOutcomeUnknown { slack_error: None }),
@@ -140,7 +138,7 @@ impl Prepared {
                 let url = file.download_url()?;
                 let expected_size = file.size.ok_or(Error::FileUnavailable)?;
                 let transfer = Transfer::new(&self.settings)?;
-                let cancelled = super::cancellation()?;
+                let cancelled = cancellation()?;
                 let size = tokio::select! {
                     biased;
                     () = cancelled => return Err(Error::Cancelled),

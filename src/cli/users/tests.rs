@@ -1,20 +1,31 @@
 use super::Prepared;
-use crate::auth::{Credentials, Kind};
-use crate::cli::{Cli, Command};
+use crate::app::Connection;
+use crate::auth::{Credentials, Kind, ProfileView};
+use crate::cli::{Cli, Command, write::Terminal};
 use crate::error::Result;
+use crate::output::Output;
 use crate::testing::{self, auth_response, client};
 use clap::Parser;
 use serde_json::{Value, json};
 use wiremock::matchers::{method, path, query_param};
 use wiremock::{Mock, MockServer, ResponseTemplate};
 
-fn prepare(args: &[&str], kind: Kind) -> Result<Prepared> {
+fn prepare(args: &[&str], kind: Kind) -> Result<(ProfileView, Prepared)> {
     let (_directory, store) = testing::store(&["work"], kind, json!({"page_size": 7}));
     let cli = Cli::try_parse_from(std::iter::once("slk").chain(args.iter().copied())).unwrap();
     let Command::Users(command) = cli.command else {
         panic!("expected a user command");
     };
     command.prepare(&store, cli.profile.as_deref(), cli.json)
+}
+
+async fn execute(
+    (profile, prepared): (ProfileView, Prepared),
+    server: &MockServer,
+    credentials: &Credentials,
+) -> Result<Output> {
+    let connection = Connection::verify(client(server), credentials.clone(), profile).await?;
+    prepared.execute(connection, &Terminal).await
 }
 
 async fn identity(server: &MockServer) {
@@ -62,9 +73,7 @@ async fn user_queries_preserve_directory_data_and_pagination() {
             .expect(1)
             .mount(&server)
             .await;
-        let result = prepare(&args, Kind::User)
-            .unwrap()
-            .execute(&client(&server), &credentials)
+        let result = execute(prepare(&args, Kind::User).unwrap(), &server, &credentials)
             .await
             .unwrap();
         let json = serde_json::to_value(result).unwrap();
@@ -139,9 +148,7 @@ async fn name_resolution_does_not_guess_across_ambiguous_or_incomplete_pages() {
             if let Some(cursor) = input_cursor {
                 args.extend(["--cursor", cursor]);
             }
-            let result = prepare(&args, Kind::User)
-                .unwrap()
-                .execute(&client(&server), &credentials)
+            let result = execute(prepare(&args, Kind::User).unwrap(), &server, &credentials)
                 .await
                 .unwrap();
             let result = serde_json::to_value(result).unwrap();
@@ -186,9 +193,7 @@ async fn dm_preview_never_opens_a_conversation_and_creation_never_sends() {
                 .expect(if dry_run { 0 } else { 1 }).mount(&server).await;
             let mut args = vec!["dm", "U1", "--json"];
             args.extend(flags);
-            let output = prepare(&args, kind)
-                .unwrap()
-                .execute(&client(&server), &credentials)
+            let output = execute(prepare(&args, kind).unwrap(), &server, &credentials)
                 .await
                 .unwrap();
             let result = serde_json::to_value(output).unwrap();
@@ -260,12 +265,14 @@ async fn invalid_dm_targets_and_api_rejections_do_not_mutate() {
             .expect(1)
             .mount(&server)
             .await;
-        let error = prepare(&["dm", "U1", "--profile", "work", "--yes"], Kind::User)
-            .unwrap()
-            .execute(&client(&server), &credentials)
-            .await
-            .err()
-            .unwrap();
+        let error = execute(
+            prepare(&["dm", "U1", "--profile", "work", "--yes"], Kind::User).unwrap(),
+            &server,
+            &credentials,
+        )
+        .await
+        .err()
+        .unwrap();
         assert_eq!(error.report().code, expected);
         assert_eq!(error.report().slack_error, slack_error);
         assert_eq!(server.received_requests().await.unwrap().len(), 2);
@@ -313,12 +320,14 @@ async fn dm_acknowledgements_distinguish_unknown_outcomes_from_explicit_rejectio
             .expect(1)
             .mount(&server)
             .await;
-        let error = prepare(&["dm", "U1", "--profile", "work", "--yes"], Kind::User)
-            .unwrap()
-            .execute(&client(&server), &credentials)
-            .await
-            .err()
-            .unwrap();
+        let error = execute(
+            prepare(&["dm", "U1", "--profile", "work", "--yes"], Kind::User).unwrap(),
+            &server,
+            &credentials,
+        )
+        .await
+        .err()
+        .unwrap();
         assert_eq!(error.report().code, expected);
         assert!(
             !serde_json::to_string(&error.report())
@@ -345,9 +354,7 @@ async fn directory_queries_and_dm_creation_remain_bound_to_the_selected_profile(
             .expect(1)
             .mount(&server)
             .await;
-        let error = prepare(&args, Kind::User)
-            .unwrap()
-            .execute(&client(&server), &credentials)
+        let error = execute(prepare(&args, Kind::User).unwrap(), &server, &credentials)
             .await
             .err()
             .unwrap();
@@ -364,12 +371,14 @@ async fn directory_queries_and_dm_creation_remain_bound_to_the_selected_profile(
         .expect(1)
         .mount(&server)
         .await;
-    let error = prepare(&["users", "lookup", "alice@example.test"], Kind::User)
-        .unwrap()
-        .execute(&client(&server), &credentials)
-        .await
-        .err()
-        .unwrap();
+    let error = execute(
+        prepare(&["users", "lookup", "alice@example.test"], Kind::User).unwrap(),
+        &server,
+        &credentials,
+    )
+    .await
+    .err()
+    .unwrap();
     assert_eq!(error.report().slack_error, Some("missing_scope"));
     assert_eq!(server.received_requests().await.unwrap().len(), 2);
 }

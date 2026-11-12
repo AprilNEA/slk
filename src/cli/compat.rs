@@ -2,12 +2,12 @@ use super::Paging;
 use super::conversations::{self, ChannelCommand, ConversationCommand};
 use super::messages::{self, MessageCommand, Target};
 use super::write::{BodyInput, SendInput, WriteInput, WriteOptions};
-use crate::auth::{Credentials, ProfileView, Store};
+use crate::app::{Connection, Prompt};
+use crate::auth::{ProfileView, Store};
 use crate::error::{Error, Result};
 use crate::ids::{parse_channel, parse_timestamp};
 use crate::messages::{MessageLink, parse_reaction};
 use crate::output::Output;
-use crate::slack::Slack;
 use clap::{ArgGroup, Args, Subcommand};
 use slack_morphism::{SlackChannelId, SlackClientHttpConnector, SlackReactionName, SlackTs};
 use std::path::PathBuf;
@@ -220,7 +220,7 @@ impl Command {
         store: &Store,
         selected: Option<&str>,
         json: bool,
-    ) -> Result<Prepared> {
+    ) -> Result<(ProfileView, Prepared)> {
         let selector = match &self {
             Self::Conversations { selector, .. } | Self::Messages { selector, .. } => selector,
         };
@@ -250,7 +250,7 @@ impl Command {
                         paging,
                     }
                     .prepare(store, selected, json)
-                    .map(Prepared::History);
+                    .map(|(profile, prepared)| (profile, Prepared::History(prepared)));
                 }
                 MessageCommand::Thread {
                     target: ExactTarget {
@@ -292,7 +292,7 @@ impl Command {
                     },
                 }
                 .prepare(store, selected, json)
-                .map(Prepared::Members);
+                .map(|(profile, prepared)| (profile, Prepared::Members(prepared)));
             }
             Self::Messages {
                 command:
@@ -371,28 +371,21 @@ impl Command {
         };
         native
             .prepare(store, selected, json)
-            .map(Prepared::Messages)
+            .map(|(profile, prepared)| (profile, Prepared::Messages(prepared)))
     }
 }
 
 impl Prepared {
-    pub(super) fn profile(&self) -> &ProfileView {
-        match self {
-            Self::Messages(prepared) | Self::History(prepared) => &prepared.profile,
-            Self::Members(prepared) => &prepared.profile,
-        }
-    }
-
     pub(super) async fn execute<C: SlackClientHttpConnector + Send + Sync>(
         self,
-        slack: &Slack<C>,
-        credentials: &Credentials,
+        connection: Connection<C>,
+        prompt: &dyn Prompt,
     ) -> Result<Output> {
         match self {
-            Self::Messages(prepared) => prepared.execute(slack, credentials).await,
-            Self::Members(prepared) => prepared.execute(slack, credentials).await,
+            Self::Messages(prepared) => prepared.execute(connection, prompt).await,
+            Self::Members(prepared) => prepared.execute(connection, prompt).await,
             Self::History(prepared) => {
-                let mut output = prepared.execute(slack, credentials).await?;
+                let mut output = prepared.execute(connection, prompt).await?;
                 if let Output::Messages(page) = &mut output {
                     page.data.reverse();
                 }

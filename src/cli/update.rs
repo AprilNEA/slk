@@ -1,4 +1,5 @@
-use super::write::Approval;
+use super::write::Terminal;
+use crate::app::Approval;
 use crate::auth::Settings;
 use crate::error::{Error, Result};
 use crate::output::{Output, terminal_text};
@@ -37,7 +38,7 @@ impl UpdateCommand {
         let path = std::env::current_exe()
             .map_err(|source| Error::io("locate the running executable", source))?;
         let report = plan.report(State::Available);
-        if !approval.confirm("Replace this executable?", || format!(
+        if !approval.confirm(&Terminal, "Replace this executable?", || format!(
             "Update {} to {}\nTarget: {}\nExecutable: {}\nSHA256 integrity is required. Replacement failures, particularly on Windows, may require manual reinstallation.",
             report.current_version, report.latest_version, report.target, terminal_text(&path.to_string_lossy()),
         ))? {

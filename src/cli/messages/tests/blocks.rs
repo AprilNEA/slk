@@ -1,6 +1,6 @@
-use super::prepare;
+use super::{execute, prepare};
 use crate::auth::{Credentials, Kind};
-use crate::testing::{auth_response, client};
+use crate::testing::auth_response;
 use serde_json::{Value, json};
 use std::fs;
 use wiremock::matchers::path;
@@ -61,10 +61,7 @@ async fn block_kit_previews_and_writes_preserve_complete_arrays_and_exact_target
                 "--profile", "work", "--json", if preview { "--dry-run" } else { "--yes" },
             ], Kind::User).unwrap();
             fs::write(&file, "[]").unwrap();
-            let output = prepared
-                .execute(&client(&server), &credentials)
-                .await
-                .unwrap();
+            let output = execute(prepared, &server, &credentials).await.unwrap();
             if preview {
                 let mut text = Vec::new();
                 output.write(false, &mut text).unwrap();
@@ -159,22 +156,25 @@ async fn explicit_empty_blocks_clear_content_but_do_not_bypass_ownership_or_mess
             .expect(u64::from(expected.is_none()))
             .mount(&server)
             .await;
-        let result = prepare(
-            &[
-                "edit",
-                "https://team.slack.com/archives/C1/p1700000000000007",
-                "--text",
-                "Intentional plain replacement",
-                "--blocks-file",
-                file.to_str().unwrap(),
-                "--profile",
-                "work",
-                "--yes",
-            ],
-            Kind::User,
+        let result = execute(
+            prepare(
+                &[
+                    "edit",
+                    "https://team.slack.com/archives/C1/p1700000000000007",
+                    "--text",
+                    "Intentional plain replacement",
+                    "--blocks-file",
+                    file.to_str().unwrap(),
+                    "--profile",
+                    "work",
+                    "--yes",
+                ],
+                Kind::User,
+            )
+            .unwrap(),
+            &server,
+            &credentials,
         )
-        .unwrap()
-        .execute(&client(&server), &credentials)
         .await;
         if let Some(code) = expected {
             assert_eq!(result.err().unwrap().report().code, code, "{field}");
@@ -274,11 +274,13 @@ async fn history_preserves_unknown_blocks_without_rendering_or_executing_them() 
         .mount(&server)
         .await;
     let credentials = Credentials::parse(Kind::User, r#"{"token":"xoxp-test"}"#).unwrap();
-    let output = prepare(&["read", "C1"], Kind::User)
-        .unwrap()
-        .execute(&client(&server), &credentials)
-        .await
-        .unwrap();
+    let output = execute(
+        prepare(&["read", "C1"], Kind::User).unwrap(),
+        &server,
+        &credentials,
+    )
+    .await
+    .unwrap();
     let mut text = Vec::new();
     output.write(false, &mut text).unwrap();
     let text = String::from_utf8(text).unwrap();

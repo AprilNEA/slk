@@ -1,6 +1,6 @@
-use super::prepare;
+use super::{execute, prepare};
 use crate::auth::{Credentials, Kind};
-use crate::testing::{auth_response, client};
+use crate::testing::auth_response;
 use serde_json::{Value, json};
 use wiremock::matchers::{method, path, query_param};
 use wiremock::{Mock, MockServer, ResponseTemplate};
@@ -73,10 +73,7 @@ async fn bot_modifications_require_the_bound_bot_and_supported_content() {
             if command == "edit" {
                 args.extend(["--text", "new"]);
             }
-            let result = prepare(&args, Kind::Bot)
-                .unwrap()
-                .execute(&client(&server), &credentials)
-                .await;
+            let result = execute(prepare(&args, Kind::Bot).unwrap(), &server, &credentials).await;
             if let Some(code) = expected {
                 assert_eq!(result.err().unwrap().report().code, code);
             } else {
@@ -190,9 +187,7 @@ async fn edits_deletes_and_reactions_target_the_link_not_the_root() {
                 }
                 args.extend(["--profile", "work", "--json"]);
                 args.push(if dry_run { "--dry-run" } else { "--yes" });
-                let output = prepare(&args, Kind::User)
-                    .unwrap()
-                    .execute(&client(&server), &credentials)
+                let output = execute(prepare(&args, Kind::User).unwrap(), &server, &credentials)
                     .await
                     .unwrap();
                 let result = serde_json::to_value(output).unwrap();
@@ -279,9 +274,7 @@ async fn own_text_mutations_reject_other_authors_and_nontext_content_before_writ
             if command == "edit" {
                 args.extend(["--text", "new"]);
             }
-            let error = prepare(&args, Kind::User)
-                .unwrap()
-                .execute(&client(&server), &credentials)
+            let error = execute(prepare(&args, Kind::User).unwrap(), &server, &credentials)
                 .await
                 .err()
                 .unwrap();
@@ -320,7 +313,7 @@ async fn inaccessible_deleted_and_unrelated_messages_never_become_mutation_targe
             .expect(1)
             .mount(&server)
             .await;
-        let error = prepare(
+        let error = execute(prepare(
             &[
                 "delete",
                 "https://team.slack.com/archives/C1/p1700000000000002?thread_ts=1700000000.000001",
@@ -330,8 +323,7 @@ async fn inaccessible_deleted_and_unrelated_messages_never_become_mutation_targe
             ],
             Kind::User,
         )
-        .unwrap()
-        .execute(&client(&server), &credentials)
+        .unwrap(), &server, &credentials)
         .await
         .err()
         .unwrap();
@@ -374,19 +366,22 @@ async fn reactions_accept_other_authors_and_keep_slack_permission_semantics() {
                 .expect(1)
                 .mount(&server)
                 .await;
-            let result = prepare(
-                &[
-                    command,
-                    "https://team.slack.com/archives/C1/p1700000000000001",
-                    "wave",
-                    "--profile",
-                    "work",
-                    "--yes",
-                ],
-                Kind::Browser,
+            let result = execute(
+                prepare(
+                    &[
+                        command,
+                        "https://team.slack.com/archives/C1/p1700000000000001",
+                        "wave",
+                        "--profile",
+                        "work",
+                        "--yes",
+                    ],
+                    Kind::Browser,
+                )
+                .unwrap(),
+                &server,
+                &credentials,
             )
-            .unwrap()
-            .execute(&client(&server), &credentials)
             .await;
             if let Some(expected) = error {
                 let error = result.err().unwrap();
@@ -437,9 +432,7 @@ async fn invalid_mutation_acknowledgements_are_unknown_not_success_or_rejection(
             if command == "edit" {
                 args.extend(["--text", "new"]);
             }
-            let error = prepare(&args, Kind::User)
-                .unwrap()
-                .execute(&client(&server), &credentials)
+            let error = execute(prepare(&args, Kind::User).unwrap(), &server, &credentials)
                 .await
                 .err()
                 .unwrap();
@@ -471,11 +464,13 @@ async fn pins_preserve_opaque_items_and_slack_rejections_without_faking_later() 
         .expect(1)
         .mount(&server)
         .await;
-    let result = prepare(&["pins", "C1", "--profile", "work"], Kind::User)
-        .unwrap()
-        .execute(&client(&server), &credentials)
-        .await
-        .unwrap();
+    let result = execute(
+        prepare(&["pins", "C1", "--profile", "work"], Kind::User).unwrap(),
+        &server,
+        &credentials,
+    )
+    .await
+    .unwrap();
     assert_eq!(
         serde_json::to_value(&result).unwrap(),
         json!({"channel_id": "C1", "data": items})
@@ -501,18 +496,21 @@ async fn pins_preserve_opaque_items_and_slack_rejections_without_faking_later() 
             .expect(1)
             .mount(&server)
             .await;
-        let error = prepare(
-            &[
-                command,
-                "https://team.slack.com/archives/C1/p1700000000000002",
-                "--profile",
-                "work",
-                "--yes",
-            ],
-            Kind::User,
+        let error = execute(
+            prepare(
+                &[
+                    command,
+                    "https://team.slack.com/archives/C1/p1700000000000002",
+                    "--profile",
+                    "work",
+                    "--yes",
+                ],
+                Kind::User,
+            )
+            .unwrap(),
+            &server,
+            &credentials,
         )
-        .unwrap()
-        .execute(&client(&server), &credentials)
         .await
         .err()
         .unwrap();

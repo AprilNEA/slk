@@ -1,7 +1,9 @@
 use super::Prepared;
-use crate::auth::{Credentials, Kind};
-use crate::cli::{Cli, Command};
+use crate::app::Connection;
+use crate::auth::{Credentials, Kind, ProfileView};
+use crate::cli::{Cli, Command, write::Terminal};
 use crate::error::Result;
+use crate::output::Output;
 use crate::scheduled::validate_time;
 use crate::testing::{self, auth_response, client};
 use chrono::{DateTime, Duration, Timelike, Utc};
@@ -11,13 +13,22 @@ use std::fs;
 use wiremock::matchers::{method, path};
 use wiremock::{Mock, MockServer, ResponseTemplate};
 
-fn prepare(args: &[&str]) -> Result<Prepared> {
+fn prepare(args: &[&str]) -> Result<(ProfileView, Prepared)> {
     let (_directory, store) = testing::store(&["work"], Kind::User, json!({"page_size": 7}));
     let cli = Cli::try_parse_from(std::iter::once("slk").chain(args.iter().copied())).unwrap();
     let Command::Schedule { command } = cli.command else {
         panic!("expected schedule")
     };
     command.prepare(&store, cli.profile.as_deref(), cli.json)
+}
+
+async fn execute(
+    (profile, prepared): (ProfileView, Prepared),
+    server: &MockServer,
+    credentials: &Credentials,
+) -> Result<Output> {
+    let connection = Connection::verify(client(server), credentials.clone(), profile).await?;
+    prepared.execute(connection, &Terminal).await
 }
 
 #[test]
@@ -105,9 +116,7 @@ async fn scheduled_replies_share_thread_validation_and_write_safety_with_immedia
                 "--json",
             ];
             args.push(if preview { "--dry-run" } else { "--yes" });
-            let output = prepare(&args)
-                .unwrap()
-                .execute(&client(&server), &credentials)
+            let output = execute(prepare(&args).unwrap(), &server, &credentials)
                 .await
                 .unwrap();
             let result = serde_json::to_value(output).unwrap();
@@ -194,10 +203,7 @@ async fn scheduled_listing_and_cancellation_use_one_page_and_the_exact_returned_
                 "--yes"
             });
         }
-        let result = prepare(&args)
-            .unwrap()
-            .execute(&client(&server), &credentials)
-            .await;
+        let result = execute(prepare(&args).unwrap(), &server, &credentials).await;
         match action {
             "missing" => assert_eq!(
                 result.err().unwrap().report().code,
@@ -273,20 +279,23 @@ async fn uncertain_schedules_do_not_retry_and_identity_changes_prevent_data_requ
             .expect(u64::from(outcome != "identity"))
             .mount(&server)
             .await;
-        let error = prepare(&[
-            "schedule",
-            "create",
-            "C1",
-            "--at",
-            &time,
-            "--text",
-            "body",
-            "--profile",
-            "work",
-            "--yes",
-        ])
-        .unwrap()
-        .execute(&client(&server), &credentials)
+        let error = execute(
+            prepare(&[
+                "schedule",
+                "create",
+                "C1",
+                "--at",
+                &time,
+                "--text",
+                "body",
+                "--profile",
+                "work",
+                "--yes",
+            ])
+            .unwrap(),
+            &server,
+            &credentials,
+        )
         .await
         .err()
         .unwrap();
@@ -324,22 +333,25 @@ async fn scheduled_block_kit_messages_preview_and_send_the_same_complete_payload
             .expect(u64::from(!preview))
             .mount(&server)
             .await;
-        let output = prepare(&[
-            "schedule",
-            "create",
-            "C9",
-            "--at",
-            &at.to_rfc3339(),
-            "--text",
-            "Deployment at the selected time",
-            "--blocks-file",
-            file.to_str().unwrap(),
-            "--profile",
-            "work",
-            if preview { "--dry-run" } else { "--yes" },
-        ])
-        .unwrap()
-        .execute(&client(&server), &credentials)
+        let output = execute(
+            prepare(&[
+                "schedule",
+                "create",
+                "C9",
+                "--at",
+                &at.to_rfc3339(),
+                "--text",
+                "Deployment at the selected time",
+                "--blocks-file",
+                file.to_str().unwrap(),
+                "--profile",
+                "work",
+                if preview { "--dry-run" } else { "--yes" },
+            ])
+            .unwrap(),
+            &server,
+            &credentials,
+        )
         .await
         .unwrap();
         if preview {

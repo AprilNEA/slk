@@ -1,7 +1,9 @@
 use super::Prepared;
-use crate::auth::{Credentials, Kind};
-use crate::cli::{Cli, Command};
+use crate::app::Connection;
+use crate::auth::{Credentials, Kind, ProfileView};
+use crate::cli::{Cli, Command, write::Terminal};
 use crate::error::{Error, Result};
+use crate::output::Output;
 use crate::testing::{self, auth_response, client};
 use clap::Parser;
 use serde_json::json;
@@ -10,7 +12,7 @@ use std::time::Duration;
 use wiremock::matchers::{body_json, method, path};
 use wiremock::{Mock, MockServer, ResponseTemplate};
 
-fn prepare(args: &[&str]) -> Result<Prepared> {
+fn prepare(args: &[&str]) -> Result<(ProfileView, Prepared)> {
     let (_directory, store) = testing::store(&["work"], Kind::User, json!({}));
     let cli = Cli::try_parse_from(["slk", "canvas"].into_iter().chain(args.iter().copied()))
         .map_err(|_| Error::Arguments("Invalid test command."))?;
@@ -18,6 +20,15 @@ fn prepare(args: &[&str]) -> Result<Prepared> {
         panic!("expected canvas command")
     };
     command.prepare(&store, cli.profile.as_deref(), cli.json)
+}
+
+async fn execute(
+    (profile, prepared): (ProfileView, Prepared),
+    server: &MockServer,
+    credentials: &Credentials,
+) -> Result<Output> {
+    let connection = Connection::verify(client(server), credentials.clone(), profile).await?;
+    prepared.execute(connection, &Terminal).await
 }
 
 async fn identity(server: &MockServer) {
@@ -77,9 +88,7 @@ async fn canvas_reads_preserve_content_and_section_ids_without_editing_or_render
             .expect(1)
             .mount(&server)
             .await;
-        let result = prepare(&args)
-            .unwrap()
-            .execute(&client(&server), &credentials)
+        let result = execute(prepare(&args).unwrap(), &server, &credentials)
             .await
             .unwrap();
         assert_eq!(serde_json::to_value(&result).unwrap(), expected);
@@ -157,9 +166,7 @@ async fn canvas_edits_preview_the_current_content_and_send_one_explicit_operatio
                 "work",
                 if dry_run { "--dry-run" } else { "--yes" },
             ]);
-            let result = prepare(&args)
-                .unwrap()
-                .execute(&client(&server), &credentials)
+            let result = execute(prepare(&args).unwrap(), &server, &credentials)
                 .await
                 .unwrap();
             let value = serde_json::to_value(&result).unwrap();
@@ -282,17 +289,20 @@ async fn canvas_failures_preserve_read_write_and_permission_semantics_without_re
             .expect(u64::from(!on_read))
             .mount(&server)
             .await;
-        let error = prepare(&[
-            "append",
-            "F7",
-            "--text",
-            "new",
-            "--profile",
-            "work",
-            "--yes",
-        ])
-        .unwrap()
-        .execute(&client(&server), &credentials)
+        let error = execute(
+            prepare(&[
+                "append",
+                "F7",
+                "--text",
+                "new",
+                "--profile",
+                "work",
+                "--yes",
+            ])
+            .unwrap(),
+            &server,
+            &credentials,
+        )
         .await
         .err()
         .unwrap();
@@ -336,9 +346,7 @@ async fn a_changed_identity_cannot_read_or_edit_the_selected_canvas() {
             .expect(1)
             .mount(&server)
             .await;
-        let error = prepare(&args)
-            .unwrap()
-            .execute(&client(&server), &credentials)
+        let error = execute(prepare(&args).unwrap(), &server, &credentials)
             .await
             .err()
             .unwrap();

@@ -1,14 +1,16 @@
 use super::Prepared;
-use crate::auth::{Credentials, Kind};
-use crate::cli::{Cli, Command};
+use crate::app::Connection;
+use crate::auth::{Credentials, Kind, ProfileView};
+use crate::cli::{Cli, Command, write::Terminal};
 use crate::error::{Error, Result};
+use crate::output::Output;
 use crate::testing::{self, auth_response, client};
 use clap::Parser;
 use serde_json::{Value, json};
 use wiremock::matchers::{method, path, query_param};
 use wiremock::{Mock, MockServer, ResponseTemplate};
 
-fn prepare(args: &[&str]) -> Result<Prepared> {
+fn prepare(args: &[&str]) -> Result<(ProfileView, Prepared)> {
     let (_directory, store) = testing::store(&["work"], Kind::User, json!({"page_size": 7}));
     let cli = Cli::try_parse_from(std::iter::once("slk").chain(args.iter().copied()))
         .map_err(|_| Error::Arguments("Invalid test command."))?;
@@ -16,6 +18,15 @@ fn prepare(args: &[&str]) -> Result<Prepared> {
         panic!("expected conversation command")
     };
     command.prepare(&store, cli.profile.as_deref(), cli.json)
+}
+
+async fn execute(
+    (profile, prepared): (ProfileView, Prepared),
+    server: &MockServer,
+    credentials: &Credentials,
+) -> Result<Output> {
+    let connection = Connection::verify(client(server), credentials.clone(), profile).await?;
+    prepared.execute(connection, &Terminal).await
 }
 
 async fn identity(server: &MockServer) {
@@ -51,9 +62,7 @@ async fn read_state_keeps_unknown_separate_from_zero_and_never_opens_or_marks_co
             vec!["unread"]
         };
         args.extend(["--profile", "work", "--cursor", "next+/="]);
-        let result = prepare(&args)
-            .unwrap()
-            .execute(&client(&server), &credentials)
+        let result = execute(prepare(&args).unwrap(), &server, &credentials)
             .await
             .unwrap();
         let value = serde_json::to_value(&result).unwrap();
@@ -148,9 +157,7 @@ async fn conversation_mutations_preview_and_apply_the_explicit_action_once() {
                 "work",
                 if preview { "--dry-run" } else { "--yes" },
             ]);
-            let result = prepare(&command)
-                .unwrap()
-                .execute(&client(&server), &credentials)
+            let result = execute(prepare(&command).unwrap(), &server, &credentials)
                 .await
                 .unwrap();
             let mut text = Vec::new();
@@ -201,22 +208,25 @@ async fn channel_creation_preserves_explicit_visibility_and_rejects_ambiguous_ac
                 .expect(u64::from(outcome != "preview"))
                 .mount(&server)
                 .await;
-            let result = prepare(&[
-                "channel",
-                "create",
-                "release-ops",
-                "--visibility",
-                visibility,
-                "--profile",
-                "work",
-                if outcome == "preview" {
-                    "--dry-run"
-                } else {
-                    "--yes"
-                },
-            ])
-            .unwrap()
-            .execute(&client(&server), &credentials)
+            let result = execute(
+                prepare(&[
+                    "channel",
+                    "create",
+                    "release-ops",
+                    "--visibility",
+                    visibility,
+                    "--profile",
+                    "work",
+                    if outcome == "preview" {
+                        "--dry-run"
+                    } else {
+                        "--yes"
+                    },
+                ])
+                .unwrap(),
+                &server,
+                &credentials,
+            )
             .await;
             match outcome {
                 "preview" => assert_eq!(
@@ -343,21 +353,24 @@ async fn group_dm_previews_inspect_members_and_never_create_or_send_until_approv
             .expect(u64::from(writes))
             .mount(&server)
             .await;
-        let result = prepare(&[
-            "group-dm",
-            "open",
-            "U1",
-            "W2",
-            "--profile",
-            "work",
-            if outcome == "preview" {
-                "--dry-run"
-            } else {
-                "--yes"
-            },
-        ])
-        .unwrap()
-        .execute(&client(&server), &credentials)
+        let result = execute(
+            prepare(&[
+                "group-dm",
+                "open",
+                "U1",
+                "W2",
+                "--profile",
+                "work",
+                if outcome == "preview" {
+                    "--dry-run"
+                } else {
+                    "--yes"
+                },
+            ])
+            .unwrap(),
+            &server,
+            &credentials,
+        )
         .await;
         match outcome {
             "preview" => {
@@ -410,11 +423,13 @@ async fn member_pages_workspace_identity_and_wrong_conversation_types_keep_their
         .and(query_param("limit", "7")).and(query_param("cursor", "next"))
         .respond_with(ResponseTemplate::new(200).set_body_json(json!({"ok": true, "members": ["U1", "W3"], "response_metadata": {"next_cursor": "more"}})))
         .expect(1).mount(&server).await;
-    let value = prepare(&["channel", "members", "G2", "--cursor", "next"])
-        .unwrap()
-        .execute(&client(&server), &credentials)
-        .await
-        .unwrap();
+    let value = execute(
+        prepare(&["channel", "members", "G2", "--cursor", "next"]).unwrap(),
+        &server,
+        &credentials,
+    )
+    .await
+    .unwrap();
     assert_eq!(
         serde_json::to_value(value).unwrap(),
         json!({"channel_id": "G2", "data": ["U1", "W3"], "pagination": {"next_cursor": "more"}})
@@ -433,10 +448,7 @@ async fn member_pages_workspace_identity_and_wrong_conversation_types_keep_their
             .expect(1)
             .mount(&server)
             .await;
-        let result = prepare(&["workspace"])
-            .unwrap()
-            .execute(&client(&server), &credentials)
-            .await;
+        let result = execute(prepare(&["workspace"]).unwrap(), &server, &credentials).await;
         if team == "T9" {
             assert_eq!(result.err().unwrap().report().code, "invalid_response");
         } else {
@@ -460,9 +472,7 @@ async fn member_pages_workspace_identity_and_wrong_conversation_types_keep_their
             .await;
         let mut args = args;
         args.extend(["--profile", "work", "--yes"]);
-        let error = prepare(&args)
-            .unwrap()
-            .execute(&client(&server), &credentials)
+        let error = execute(prepare(&args).unwrap(), &server, &credentials)
             .await
             .err()
             .unwrap();

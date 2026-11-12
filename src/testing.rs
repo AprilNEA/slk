@@ -10,9 +10,14 @@ use tempfile::TempDir;
 use wiremock::MockServer;
 
 pub(crate) fn client(server: &MockServer) -> Slack<SlackClientHyperConnector<HttpConnector>> {
+    client_at(&server.uri())
+}
+
+/// Builds a client for the mock server at `uri`, for callers that cannot borrow the server.
+pub(crate) fn client_at(uri: &str) -> Slack<SlackClientHyperConnector<HttpConnector>> {
     Slack::new(
         SlackClientHyperConnector::with_connector(HttpConnector::new())
-            .with_slack_api_url(&format!("{}/api", server.uri())),
+            .with_slack_api_url(&format!("{uri}/api")),
         Duration::from_secs(2),
     )
 }

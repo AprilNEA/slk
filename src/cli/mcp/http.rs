@@ -46,7 +46,7 @@ where
     }
     let cancellation = config.cancellation_token.clone();
     let router = router(server, AccessToken::new(token), config);
-    let cancelled = crate::cli::cancellation()?;
+    let cancelled = crate::app::cancellation()?;
     let listener = tokio::net::TcpListener::bind(address)
         .await
         .map_err(|error| Error::io("listen for MCP HTTP requests", error))?;

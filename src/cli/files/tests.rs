@@ -1,7 +1,9 @@
 use super::Prepared;
-use crate::auth::{Credentials, Kind};
-use crate::cli::{Cli, Command};
+use crate::app::Connection;
+use crate::auth::{Credentials, Kind, ProfileView};
+use crate::cli::{Cli, Command, write::Terminal};
 use crate::error::Result;
+use crate::output::Output;
 use crate::testing::{self, auth_response, client};
 use clap::Parser;
 use serde_json::{Value, json};
@@ -9,7 +11,7 @@ use std::fs;
 use wiremock::matchers::{path, query_param};
 use wiremock::{Mock, MockServer, ResponseTemplate};
 
-fn prepare(args: &[&str]) -> Result<Prepared> {
+fn prepare(args: &[&str]) -> Result<(ProfileView, Prepared)> {
     let (_directory, store) = testing::store(&["work"], Kind::User, json!({}));
     let cli = Cli::try_parse_from(std::iter::once("slk").chain(args.iter().copied())).unwrap();
     let Command::Files { command, selector } = cli.command else {
@@ -17,6 +19,15 @@ fn prepare(args: &[&str]) -> Result<Prepared> {
     };
     let selected = selector.resolve(&store, cli.profile.as_deref())?;
     command.prepare(&store, selected.as_deref(), cli.json)
+}
+
+async fn execute(
+    (profile, prepared): (ProfileView, Prepared),
+    server: &MockServer,
+    credentials: &Credentials,
+) -> Result<Output> {
+    let connection = Connection::verify(client(server), credentials.clone(), profile).await?;
+    prepared.execute(connection, &Terminal).await
 }
 
 #[tokio::test]
@@ -41,9 +52,7 @@ async fn upload_preview_is_private_by_default_and_does_not_request_an_upload_tic
         if let Some(channel) = channel {
             args.extend(["--channel", channel]);
         }
-        let result = prepare(&args)
-            .unwrap()
-            .execute(&client(&server), &credentials)
+        let result = execute(prepare(&args).unwrap(), &server, &credentials)
             .await
             .unwrap();
         let result = serde_json::to_value(result).unwrap();
@@ -77,10 +86,12 @@ async fn file_metadata_hides_private_urls_preserves_text_and_rejects_wrong_ids()
                 "id": id, "title": "visible\u{001b}]52;discarded", "size": 7,
                 "url_private": "https://files.slack.com/private", "url_private_download": "https://files.slack.com/download"
             }}))).expect(1).mount(&server).await;
-        let result = prepare(&["files", "info", "F1"])
-            .unwrap()
-            .execute(&client(&server), &credentials)
-            .await;
+        let result = execute(
+            prepare(&["files", "info", "F1"]).unwrap(),
+            &server,
+            &credentials,
+        )
+        .await;
         if id == "F9" {
             assert_eq!(result.err().unwrap().report().code, "invalid_response");
         } else {
@@ -121,9 +132,7 @@ async fn file_commands_stop_before_data_access_when_identity_changes() {
             .expect(1)
             .mount(&server)
             .await;
-        let error = prepare(&args)
-            .unwrap()
-            .execute(&client(&server), &credentials)
+        let error = execute(prepare(&args).unwrap(), &server, &credentials)
             .await
             .err()
             .unwrap();

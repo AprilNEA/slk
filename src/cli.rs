@@ -1,8 +1,8 @@
+use crate::app::Connection;
 use crate::auth::{Settings, Store};
 use crate::error::{Error, Result};
 use crate::output::{self, Output};
-use crate::platform::{Native, Platform};
-use crate::slack::{CursorPage, MAX_PAGE_SIZE, Slack};
+use crate::slack::{CursorPage, MAX_PAGE_SIZE};
 use clap::{Args, CommandFactory, FromArgMatches, Parser, Subcommand, error::ErrorKind};
 use std::ffi::OsString;
 use std::io;
@@ -198,82 +198,43 @@ async fn execute_with_store(cli: Cli, store: &mut Store) -> Result<Output> {
         Command::Update(command) => return command.execute(store.settings(), cli.json).await,
         Command::Auth { command } => command,
         Command::Compatibility(command) => {
-            let prepared = command.prepare(store, cli.profile.as_deref(), cli.json)?;
-            let credentials = store.credentials(&prepared.profile().profile)?;
-            let slack = Slack::connect(
-                credentials.realm(),
-                credentials.workspace(),
-                store.settings(),
-            )?;
-            return prepared.execute(&slack, &credentials).await;
+            let (profile, prepared) = command.prepare(store, cli.profile.as_deref(), cli.json)?;
+            let connection = Connection::open(store, profile).await?;
+            return prepared.execute(connection, &write::Terminal).await;
         }
         Command::Messages(command) => {
-            let prepared = command.prepare(store, cli.profile.as_deref(), cli.json)?;
-            let credentials = store.credentials(&prepared.profile.profile)?;
-            let slack = Slack::connect(
-                credentials.realm(),
-                credentials.workspace(),
-                store.settings(),
-            )?;
-            return prepared.execute(&slack, &credentials).await;
+            let (profile, prepared) = command.prepare(store, cli.profile.as_deref(), cli.json)?;
+            let connection = Connection::open(store, profile).await?;
+            return prepared.execute(connection, &write::Terminal).await;
         }
         Command::Users(command) => {
-            let prepared = command.prepare(store, cli.profile.as_deref(), cli.json)?;
-            let credentials = store.credentials(&prepared.profile.profile)?;
-            let slack = Slack::connect(
-                credentials.realm(),
-                credentials.workspace(),
-                store.settings(),
-            )?;
-            return prepared.execute(&slack, &credentials).await;
+            let (profile, prepared) = command.prepare(store, cli.profile.as_deref(), cli.json)?;
+            let connection = Connection::open(store, profile).await?;
+            return prepared.execute(connection, &write::Terminal).await;
         }
         Command::Conversations(command) => {
-            let prepared = command.prepare(store, cli.profile.as_deref(), cli.json)?;
-            let credentials = store.credentials(&prepared.profile.profile)?;
-            let slack = Slack::connect(
-                credentials.realm(),
-                credentials.workspace(),
-                store.settings(),
-            )?;
-            return prepared.execute(&slack, &credentials).await;
+            let (profile, prepared) = command.prepare(store, cli.profile.as_deref(), cli.json)?;
+            let connection = Connection::open(store, profile).await?;
+            return prepared.execute(connection, &write::Terminal).await;
         }
         Command::Files { command, selector } => {
             let selected = selector.resolve(store, cli.profile.as_deref())?;
-            let prepared = command.prepare(store, selected.as_deref(), cli.json)?;
-            let credentials = store.credentials(&prepared.profile.profile)?;
-            let slack = Slack::connect(
-                credentials.realm(),
-                credentials.workspace(),
-                store.settings(),
-            )?;
-            return prepared.execute(&slack, &credentials).await;
+            let (profile, prepared) = command.prepare(store, selected.as_deref(), cli.json)?;
+            let connection = Connection::open(store, profile).await?;
+            return prepared.execute(connection, &write::Terminal).await;
         }
         Command::Schedule { command } => {
-            let prepared = command.prepare(store, cli.profile.as_deref(), cli.json)?;
-            let credentials = store.credentials(&prepared.profile.profile)?;
-            let slack = Slack::connect(
-                credentials.realm(),
-                credentials.workspace(),
-                store.settings(),
-            )?;
-            return prepared.execute(&slack, &credentials).await;
+            let (profile, prepared) = command.prepare(store, cli.profile.as_deref(), cli.json)?;
+            let connection = Connection::open(store, profile).await?;
+            return prepared.execute(connection, &write::Terminal).await;
         }
         Command::Canvas { command } => {
-            let prepared = command.prepare(store, cli.profile.as_deref(), cli.json)?;
-            let credentials = store.credentials(&prepared.profile.profile)?;
-            let slack = Slack::connect(
-                credentials.realm(),
-                credentials.workspace(),
-                store.settings(),
-            )?;
-            return prepared.execute(&slack, &credentials).await;
+            let (profile, prepared) = command.prepare(store, cli.profile.as_deref(), cli.json)?;
+            let connection = Connection::open(store, profile).await?;
+            return prepared.execute(connection, &write::Terminal).await;
         }
     };
     command
         .execute(store, cli.profile, &cli.source, cli.json)
         .await
-}
-
-fn cancellation() -> Result<impl std::future::Future<Output = ()>> {
-    Native::cancellation().map_err(|error| Error::io("handle cancellation signals", error))
 }

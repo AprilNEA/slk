@@ -1,7 +1,9 @@
 use super::Prepared;
-use crate::auth::{Credentials, Kind};
-use crate::cli::{Cli, Command};
+use crate::app::Connection;
+use crate::auth::{Credentials, Kind, ProfileView};
+use crate::cli::{Cli, Command, write::Terminal};
 use crate::error::Result;
+use crate::output::Output;
 use crate::testing::{self, auth_response, client};
 use clap::Parser;
 use serde_json::{Value, json};
@@ -13,13 +15,22 @@ mod blocks;
 mod modify;
 mod split;
 
-fn prepare(args: &[&str], kind: Kind) -> Result<Prepared> {
+fn prepare(args: &[&str], kind: Kind) -> Result<(ProfileView, Prepared)> {
     let (_directory, store) = testing::store(&["work"], kind, json!({"page_size": 7}));
     let cli = Cli::try_parse_from(std::iter::once("slk").chain(args.iter().copied())).unwrap();
     let Command::Messages(command) = cli.command else {
         panic!("expected a message command");
     };
     command.prepare(&store, cli.profile.as_deref(), cli.json)
+}
+
+async fn execute(
+    (profile, prepared): (ProfileView, Prepared),
+    server: &MockServer,
+    credentials: &Credentials,
+) -> Result<Output> {
+    let connection = Connection::verify(client(server), credentials.clone(), profile).await?;
+    prepared.execute(connection, &Terminal).await
 }
 
 #[tokio::test]
@@ -66,9 +77,7 @@ async fn dry_runs_return_verified_identity_and_body_without_writes() {
                 .mount(&server)
                 .await;
         }
-        let result = prepare(&args, Kind::User)
-            .unwrap()
-            .execute(&client(&server), &credentials)
+        let result = execute(prepare(&args, Kind::User).unwrap(), &server, &credentials)
             .await
             .unwrap();
         let result = serde_json::to_value(result).unwrap();
@@ -133,14 +142,12 @@ async fn non_threadable_roots_are_rejected_before_preview_or_post() {
                 }
                 let mut args = vec![command, link];
                 args.extend_from_slice(options);
-                let error = match prepare(&args, Kind::User)
-                    .unwrap()
-                    .execute(&client(&server), &credentials)
-                    .await
-                {
-                    Ok(_) => panic!("{subtype} must not be accepted by {args:?}"),
-                    Err(error) => error,
-                };
+                let error =
+                    match execute(prepare(&args, Kind::User).unwrap(), &server, &credentials).await
+                    {
+                        Ok(_) => panic!("{subtype} must not be accepted by {args:?}"),
+                        Err(error) => error,
+                    };
                 assert_eq!(error.report().code, "thread_unresolved", "{args:?}");
                 assert!(
                     server
@@ -226,7 +233,7 @@ async fn identity_changes_abort_before_the_write_api() {
     )
     .unwrap();
     let credentials = Credentials::parse(Kind::User, r#"{"token":"xoxp-test"}"#).unwrap();
-    let error = match prepared.execute(&client(&server), &credentials).await {
+    let error = match execute(prepared, &server, &credentials).await {
         Ok(_) => panic!("identity change must fail"),
         Err(error) => error,
     };
@@ -276,10 +283,7 @@ async fn a_file_reply_uses_the_confirmed_root_and_returns_the_acknowledgement() 
     )
     .unwrap();
     let credentials = Credentials::parse(Kind::User, r#"{"token":"xoxp-test"}"#).unwrap();
-    let result = prepared
-        .execute(&client(&server), &credentials)
-        .await
-        .unwrap();
+    let result = execute(prepared, &server, &credentials).await.unwrap();
     assert_eq!(
         serde_json::to_value(result).unwrap(),
         json!({"channel_id": "C1", "ts": "1700000000.000009", "thread_ts": "1700000000.000001"})
@@ -316,11 +320,13 @@ async fn history_dispatch_uses_the_configured_page_size_and_cursor() {
         .mount(&server)
         .await;
     let credentials = Credentials::parse(Kind::User, r#"{"token":"xoxp-test"}"#).unwrap();
-    let result = prepare(&["read", "C1", "--cursor", "next+/="], Kind::User)
-        .unwrap()
-        .execute(&client(&server), &credentials)
-        .await
-        .unwrap();
+    let result = execute(
+        prepare(&["read", "C1", "--cursor", "next+/="], Kind::User).unwrap(),
+        &server,
+        &credentials,
+    )
+    .await
+    .unwrap();
     assert_eq!(
         serde_json::to_value(result).unwrap(),
         json!({"data": [], "pagination": {"next_cursor": "later"}})
@@ -347,9 +353,8 @@ async fn rejected_sessions_require_explicit_login_without_retry_or_fallback() {
                 .expect(1)
                 .mount(&server)
                 .await;
-            let error = prepare(&["channels"], credentials.kind())
-                .unwrap()
-                .execute(&client(&server), &credentials)
+            let error = execute(prepare(&["channels"], credentials.kind())
+                .unwrap(), &server, &credentials)
                 .await
                 .err()
                 .unwrap();

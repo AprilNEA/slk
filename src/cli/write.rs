@@ -1,3 +1,4 @@
+use crate::app::{Approval, Prompt};
 use crate::auth::Settings;
 use crate::error::{Error, Result};
 use crate::messages::{Content, MAX_TEXT_CHARS, MessageText};
@@ -52,12 +53,6 @@ pub(super) struct WriteOptions {
     /// Skip confirmation; automation also requires an explicit identity selector.
     #[arg(long)]
     yes: bool,
-}
-
-pub(super) enum Approval {
-    Preview,
-    Confirm,
-    Approved,
 }
 
 impl WriteOptions {
@@ -168,25 +163,19 @@ impl BodyInput {
     }
 }
 
-impl Approval {
-    pub(super) fn confirm(self, prompt: &str, preview: impl FnOnce() -> String) -> Result<bool> {
-        match self {
-            Self::Preview => Ok(false),
-            Self::Approved => Ok(true),
-            Self::Confirm => {
-                writeln!(io::stderr().lock(), "{}", preview())
-                    .map_err(|error| Error::io("write the operation preview", error))?;
-                let confirmed = dialoguer::Confirm::new()
-                    .with_prompt(prompt)
-                    .default(false)
-                    .wait_for_newline(true)
-                    .interact_opt()
-                    .map_err(|_| Error::Confirmation)?;
-                if confirmed != Some(true) {
-                    return Err(Error::Cancelled);
-                }
-                Ok(true)
-            }
-        }
+/// Asks on the controlling terminal; the default answer is no.
+pub(super) struct Terminal;
+
+impl Prompt for Terminal {
+    fn confirm(&self, question: &str, preview: &str) -> Result<bool> {
+        writeln!(io::stderr().lock(), "{preview}")
+            .map_err(|error| Error::io("write the operation preview", error))?;
+        let confirmed = dialoguer::Confirm::new()
+            .with_prompt(question)
+            .default(false)
+            .wait_for_newline(true)
+            .interact_opt()
+            .map_err(|_| Error::Confirmation)?;
+        Ok(confirmed == Some(true))
     }
 }

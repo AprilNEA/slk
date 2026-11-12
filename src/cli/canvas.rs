@@ -1,9 +1,10 @@
-use super::write::{Approval, BodyInput, WriteOptions};
-use crate::auth::{Credentials, ProfileView, Store};
+use super::write::{BodyInput, WriteOptions};
+use crate::app::{Approval, Connection, Prompt};
+use crate::auth::{ProfileView, Store};
 use crate::error::{Error, Result};
 use crate::ids::{parse_canvas, parse_section};
 use crate::output::{Output, canvas as output};
-use crate::slack::{ContentType, Slack};
+use crate::slack::ContentType;
 use clap::{ArgGroup, Args, Subcommand, builder::NonEmptyStringValueParser};
 use slack_morphism::api::{
     SlackApiCanvasesEditRequest, SlackApiCanvasesSectionsLookupRequest, SlackCanvasChange,
@@ -92,7 +93,6 @@ enum Request {
 }
 
 pub(super) struct Prepared {
-    pub profile: ProfileView,
     request: Request,
 }
 
@@ -102,7 +102,7 @@ impl CanvasCommand {
         store: &Store,
         selected: Option<&str>,
         json: bool,
-    ) -> Result<Prepared> {
+    ) -> Result<(ProfileView, Prepared)> {
         let profile = store.select(selected)?;
         let edit = |input: EditInput, operation, section_id| -> Result<Request> {
             let approval = input.options.prepare(selected.is_some(), json)?;
@@ -169,19 +169,22 @@ impl CanvasCommand {
                 approval: options.prepare(selected.is_some(), json)?,
             },
         };
-        Ok(Prepared { profile, request })
+        Ok((profile, Prepared { request }))
     }
 }
 
 impl Prepared {
     pub(super) async fn execute<C: SlackClientHttpConnector + Send + Sync>(
         self,
-        slack: &Slack<C>,
-        credentials: &Credentials,
+        connection: Connection<C>,
+        prompt: &dyn Prompt,
     ) -> Result<Output> {
-        if slack.identify(credentials).await? != self.profile.identity {
-            return Err(Error::IdentityMismatch);
-        }
+        let Connection {
+            slack,
+            credentials,
+            profile,
+        } = connection;
+        let credentials = &credentials;
         let result = match self.request {
             Request::Read {
                 canvas_id,
@@ -201,12 +204,12 @@ impl Prepared {
                 let before = slack
                     .canvas_content(credentials, &request.canvas_id, ContentType::Markdown)
                     .await?;
-                if !approval.confirm("Apply this canvas edit?", || {
-                    output::preview(&self.profile, &before, &request)
+                if !approval.confirm(prompt, "Apply this canvas edit?", || {
+                    output::preview(&profile, &before, &request)
                 })? {
                     output::Output::Preview {
                         dry_run: true,
-                        profile: Box::new(self.profile),
+                        profile: Box::new(profile),
                         before,
                         request,
                     }
