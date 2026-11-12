@@ -1,6 +1,6 @@
 use crate::auth::{Kind, ProfileView};
 use crate::error::{Error, Result};
-use crate::slack::{Pagination, Resolution, ResolutionStatus};
+use crate::model::pagination::{Pagination, Resolution, ResolutionStatus};
 use serde::Serialize;
 use std::io::{self, Write};
 

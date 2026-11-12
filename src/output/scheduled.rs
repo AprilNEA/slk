@@ -2,8 +2,8 @@ use super::messages::preview_text;
 use super::{identity_text, page_text, terminal_text};
 use crate::auth::ProfileView;
 use crate::model::messages::Draft;
+use crate::model::pagination::Page;
 use crate::model::scheduled::{Receipt, Scheduled};
-use crate::slack::Page;
 use chrono::{DateTime, Utc};
 use serde::Serialize;
 

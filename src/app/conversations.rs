@@ -1,8 +1,8 @@
 use super::{Approval, Connection, Prompt};
 use crate::error::Result;
 use crate::model::conversations::ConversationAction;
+use crate::model::pagination::CursorPage;
 use crate::output::conversations::{self as output, Output};
-use crate::slack::CursorPage;
 use slack_morphism::{
     SlackChannelId, SlackClientHttpConnector, SlackConversationType, SlackUserId,
 };

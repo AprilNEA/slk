@@ -1,7 +1,7 @@
 use super::{Approval, Connection, Prompt};
 use crate::error::Result;
+use crate::model::pagination::CursorPage;
 use crate::output::users::{Output, dm_preview_text};
-use crate::slack::CursorPage;
 use slack_morphism::{SlackClientHttpConnector, SlackUserId};
 
 pub(crate) enum Request {

@@ -2,8 +2,10 @@ use super::{Approval, Connection, Prompt};
 use crate::auth::Credentials;
 use crate::error::{Error, Result};
 use crate::model::messages::{Change, Content, Draft, MessageReference, SearchPage};
+use crate::model::pagination::CursorPage;
 use crate::output::messages::{Output, batch_preview_text, change_preview_text};
-use crate::slack::{CursorPage, Slack, ThreadRequest};
+use crate::slack::Slack;
+use crate::slack::messages::ThreadRequest;
 use slack_morphism::{SlackChannelId, SlackClientHttpConnector};
 
 /// Where a new message goes: a conversation, or the thread that a message reference identifies.

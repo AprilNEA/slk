@@ -2,9 +2,9 @@ use super::messages::Destination;
 use super::{Approval, Connection, Prompt};
 use crate::error::{Error, Result};
 use crate::model::messages::Content;
+use crate::model::pagination::CursorPage;
 use crate::model::scheduled::validate_time;
 use crate::output::scheduled::{Output, cancel_preview_text, schedule_preview_text};
-use crate::slack::CursorPage;
 use chrono::{DateTime, FixedOffset, Utc};
 use slack_morphism::{SlackChannelId, SlackClientHttpConnector};
 

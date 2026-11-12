@@ -9,6 +9,7 @@ use wiremock::matchers::{any, method, path};
 use wiremock::{Mock, MockServer, ResponseTemplate};
 
 mod conversations;
+mod messages;
 mod oauth;
 mod search;
 mod write;

@@ -4,5 +4,6 @@ pub(crate) mod canvas;
 pub(crate) mod conversations;
 pub(crate) mod files;
 pub(crate) mod messages;
+pub(crate) mod pagination;
 pub(crate) mod scheduled;
 pub(crate) mod users;

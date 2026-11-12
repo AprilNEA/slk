@@ -2,8 +2,8 @@ use super::{Output, conversations, messages, terminal_text, users};
 use crate::auth::{Identity, Kind, ProfileView, Workspace};
 use crate::model::conversations::Channel;
 use crate::model::messages::{Change, Message, MessageText};
+use crate::model::pagination::{Page, Pagination, Resolution, ResolutionStatus};
 use crate::model::users::User;
-use crate::slack::{Page, Pagination, Resolution, ResolutionStatus};
 use serde_json::{Value, json};
 use slack_morphism::SlackConversationType;
 

@@ -1,33 +1,23 @@
 use crate::auth::{Credentials, Identity, Kind, Realm, Settings, Workspace};
 use crate::error::{Error, Result};
-use crate::ids::parse_timestamp;
-use crate::model::messages::{Draft, Sent};
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
-use slack_morphism::api::{SlackApiAuthTestResponse, SlackApiChatPostMessageRequest};
+use slack_morphism::api::SlackApiAuthTestResponse;
 use slack_morphism::errors::SlackClientError;
 use slack_morphism::hyper_tokio::SlackClientHyperHttpsConnector;
-use slack_morphism::prelude::ValueStruct;
-use slack_morphism::{
-    ClientResult, SlackApiToken, SlackChannelId, SlackClient, SlackClientHttpConnector,
-    SlackMessageContent, SlackTs,
-};
+use slack_morphism::{ClientResult, SlackApiToken, SlackClient, SlackClientHttpConnector};
 use std::future::Future;
 use std::time::Duration;
 
 mod canvas;
 mod conversations;
 pub(crate) mod files;
-mod modify;
+pub(crate) mod messages;
 mod oauth;
 mod pagination;
 mod scheduled;
-mod search;
 mod users;
 
-pub(crate) use conversations::ThreadRequest;
-pub(crate) use pagination::{
-    CursorPage, MAX_PAGE_SIZE, Page, Pagination, Resolution, ResolutionStatus,
-};
+const CONVERSATION_TYPES: &str = "public_channel,private_channel,mpim,im";
 
 pub(crate) struct Slack<C: SlackClientHttpConnector + Send> {
     client: SlackClient<C>,
@@ -39,18 +29,6 @@ struct ApiResponse<T> {
     ok: bool,
     #[serde(flatten)]
     body: T,
-}
-
-#[derive(Deserialize)]
-struct PostResponse {
-    channel: SlackChannelId,
-    ts: SlackTs,
-    message: PostedMessage,
-}
-
-#[derive(Deserialize)]
-struct PostedMessage {
-    thread_ts: Option<SlackTs>,
 }
 
 impl Slack<SlackClientHyperHttpsConnector> {
@@ -112,23 +90,6 @@ impl<C: SlackClientHttpConnector + Send + Sync> Slack<C> {
         Ok(identity)
     }
 
-    pub(crate) async fn send(&self, credentials: &Credentials, draft: &Draft) -> Result<Sent> {
-        let response: PostResponse = self
-            .write(credentials, "chat.postMessage", &message_request(draft))
-            .await?;
-        if response.channel != draft.channel_id
-            || response.message.thread_ts != draft.thread_ts
-            || parse_timestamp(response.ts.value()).is_err()
-        {
-            return Err(Error::WriteOutcomeUnknown { slack_error: None });
-        }
-        Ok(Sent {
-            channel_id: response.channel,
-            ts: response.ts,
-            thread_ts: response.message.thread_ts,
-        })
-    }
-
     async fn get<T: DeserializeOwned + Send>(
         &self,
         credentials: &Credentials,
@@ -177,19 +138,6 @@ impl<C: SlackClientHttpConnector + Send + Sync> Slack<C> {
         }
         Ok(response.body)
     }
-}
-
-fn message_request(draft: &Draft) -> SlackApiChatPostMessageRequest {
-    SlackApiChatPostMessageRequest::new(
-        draft.channel_id.clone(),
-        SlackMessageContent::from(&draft.content),
-    )
-    .opt_thread_ts(draft.thread_ts.clone())
-    .with_reply_broadcast(false)
-    .with_unfurl_links(false)
-    .with_unfurl_media(false)
-    .with_link_names(false)
-    .with_parse("none".to_owned())
 }
 
 fn map_write_error(error: Error) -> Error {

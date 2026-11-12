@@ -1,8 +1,9 @@
-use super::{CursorPage, Page, Slack, pagination};
+use super::{Slack, pagination};
 use crate::auth::Credentials;
 use crate::error::{Error, Result};
 use crate::ids::parse_scheduled_message;
 use crate::model::messages::Draft;
+use crate::model::pagination::{CursorPage, Page};
 use crate::model::scheduled::{Receipt, Scheduled};
 use serde::Deserialize;
 use serde_json::json;
@@ -23,8 +24,8 @@ impl<C: SlackClientHttpConnector + Send + Sync> Slack<C> {
         draft: &Draft,
         post_at: i64,
     ) -> Result<Receipt> {
-        let mut body =
-            serde_json::to_value(super::message_request(draft)).map_err(|_| Error::Response)?;
+        let mut body = serde_json::to_value(super::messages::message_request(draft))
+            .map_err(|_| Error::Response)?;
         body["post_at"] = json!(post_at);
         let receipt: Receipt = self
             .write(credentials, "chat.scheduleMessage", &body)

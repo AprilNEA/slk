@@ -1,7 +1,8 @@
-use super::{CursorPage, Page, Slack, pagination};
+use super::{Slack, pagination};
 use crate::auth::Credentials;
 use crate::error::{Error, Result};
 use crate::ids::parse_channel;
+use crate::model::pagination::{CursorPage, Page};
 use crate::model::users::{OpenedDm, User};
 use serde::Deserialize;
 use slack_morphism::api::SlackApiConversationsOpenRequest;

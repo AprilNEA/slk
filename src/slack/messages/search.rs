@@ -1,9 +1,10 @@
-use super::conversations::{CONVERSATION_TYPES, WireMessage};
-use super::pagination::{self, RequestPage};
-use super::{Page, Pagination, Slack};
+use super::WireMessage;
 use crate::auth::{Credentials, Kind};
 use crate::error::{Error, Result};
 use crate::model::messages::{MAX_SEARCH_PAGE, Message, SearchPage};
+use crate::model::pagination::{Page, Pagination};
+use crate::slack::pagination::{self, RequestPage};
+use crate::slack::{CONVERSATION_TYPES, Slack};
 use serde::Deserialize;
 use slack_morphism::{
     SlackApiToken, SlackBasicChannelInfo, SlackChannelId, SlackClientHttpConnector,

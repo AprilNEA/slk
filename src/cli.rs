@@ -1,8 +1,8 @@
 use crate::app::Connection;
 use crate::auth::{Settings, Store};
 use crate::error::{Error, Result};
+use crate::model::pagination::{CursorPage, MAX_PAGE_SIZE};
 use crate::output::{self, Output};
-use crate::slack::{CursorPage, MAX_PAGE_SIZE};
 use clap::{Args, CommandFactory, FromArgMatches, Parser, Subcommand, error::ErrorKind};
 use std::ffi::OsString;
 use std::io;

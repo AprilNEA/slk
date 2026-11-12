@@ -1,7 +1,7 @@
 use super::{identity_text, page_text, terminal_text};
 use crate::auth::ProfileView;
 use crate::model::messages::{Change, Changed, Content, Draft, Message, Sent};
-use crate::slack::Page;
+use crate::model::pagination::Page;
 use serde::Serialize;
 use slack_morphism::SlackChannelId;
 use slack_morphism::prelude::ValueStruct;

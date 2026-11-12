@@ -1,7 +1,7 @@
 use super::{identity_text, page_text, resolution_text, terminal_text};
 use crate::auth::ProfileView;
+use crate::model::pagination::{Page, Resolution};
 use crate::model::users::{OpenedDm, User};
-use crate::slack::{Page, Resolution};
 use serde::Serialize;
 use slack_morphism::prelude::ValueStruct;
 
