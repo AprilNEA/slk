@@ -1,8 +1,8 @@
 use super::write::{Approval, WriteOptions};
 use crate::auth::{Credentials, FileSettings, ProfileView, Store};
 use crate::error::{Error, Result};
-use crate::files::{Transfer, Upload, parse_file};
-use crate::messages::parse_channel;
+use crate::files::{Transfer, Upload};
+use crate::ids::{parse_channel, parse_file};
 use crate::output::{self, Output};
 use crate::slack::Slack;
 use clap::Subcommand;

@@ -1,5 +1,6 @@
 use crate::auth::{Identity, Workspace};
 use crate::error::{Error, Result};
+use crate::ids::{parse_channel, parse_timestamp};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use slack_morphism::blocks::SlackBlock;
@@ -97,37 +98,6 @@ impl MessageLink {
         }
         Ok(explicit.or(self.thread_ts.as_ref()).unwrap_or(&self.ts))
     }
-}
-
-pub(crate) fn parse_channel(value: &str) -> Result<SlackChannelId> {
-    if value.len() < 2
-        || !value.starts_with(['C', 'G', 'D'])
-        || !value
-            .bytes()
-            .all(|byte| byte.is_ascii_uppercase() || byte.is_ascii_digit())
-    {
-        return Err(Error::Arguments(
-            "Use a conversation ID starting with C, G, or D, not a name or user ID.",
-        ));
-    }
-    Ok(SlackChannelId(value.to_owned()))
-}
-
-pub(crate) fn parse_timestamp(value: &str) -> Result<SlackTs> {
-    let valid = value.split_once('.').is_some_and(|(seconds, fraction)| {
-        !seconds.is_empty()
-            && fraction.len() == 6
-            && seconds
-                .bytes()
-                .chain(fraction.bytes())
-                .all(|byte| byte.is_ascii_digit())
-    });
-    if !valid {
-        return Err(Error::Arguments(
-            "Use a Slack timestamp in seconds.microseconds format with six fractional digits.",
-        ));
-    }
-    Ok(SlackTs(value.to_owned()))
 }
 
 #[derive(Debug, Serialize)]

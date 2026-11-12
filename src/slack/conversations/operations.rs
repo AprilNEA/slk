@@ -1,7 +1,7 @@
 use super::{CONVERSATION_TYPES, Channel, Conversation};
 use crate::auth::Credentials;
 use crate::error::{Error, Result};
-use crate::messages::parse_channel;
+use crate::ids::parse_channel;
 use crate::slack::{CursorPage, Page, Slack, pagination};
 use serde::{Deserialize, Serialize};
 use serde_json::json;

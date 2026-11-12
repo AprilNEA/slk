@@ -7,6 +7,7 @@ mod auth;
 mod cli;
 mod error;
 mod files;
+mod ids;
 mod messages;
 mod output;
 mod platform;

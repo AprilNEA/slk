@@ -1,5 +1,6 @@
-use super::{MessageLink, MessageText, parse_channel, parse_timestamp};
+use super::{MessageLink, MessageText};
 use crate::auth::Workspace;
+use crate::ids::{parse_channel, parse_timestamp};
 
 #[test]
 fn message_links_preserve_microseconds_and_enforce_workspace_and_root_hints() {

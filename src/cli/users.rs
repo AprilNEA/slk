@@ -2,9 +2,9 @@ use super::Paging;
 use super::write::{Approval, WriteOptions};
 use crate::auth::{Credentials, ProfileView, Store};
 use crate::error::{Error, Result};
+use crate::ids::parse_user;
 use crate::output::{self, Output};
 use crate::slack::{CursorPage, Slack};
-use crate::users::parse_user;
 use clap::{Subcommand, ValueEnum};
 use slack_morphism::{SlackClientHttpConnector, SlackUserId};
 

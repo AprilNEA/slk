@@ -8,6 +8,7 @@ pub(crate) use credentials::{Credentials, Kind, Realm, Rotation, Workspace};
 
 use crate::APP_ID;
 use crate::error::{Error, Result};
+use crate::ids;
 use crate::platform::NativeStore;
 use config::{Config, Profile};
 use credentials::CredentialInput;
@@ -30,20 +31,12 @@ pub(crate) struct Identity {
 
 impl Identity {
     pub(super) fn validate(&self) -> Result<()> {
-        if !self.team_id.starts_with('T')
-            || self.team_id.len() < 2
-            || !self
-                .team_id
-                .bytes()
-                .all(|byte| byte.is_ascii_uppercase() || byte.is_ascii_digit())
-            || crate::users::parse_user(&self.user_id).is_err()
-            || self.bot_id.as_ref().is_some_and(|id| {
-                !id.starts_with('B')
-                    || id.len() < 2
-                    || !id
-                        .bytes()
-                        .all(|byte| byte.is_ascii_uppercase() || byte.is_ascii_digit())
-            })
+        if !ids::is_id(&self.team_id, &['T'])
+            || ids::parse_user(&self.user_id).is_err()
+            || self
+                .bot_id
+                .as_ref()
+                .is_some_and(|id| !ids::is_id(id, &['B']))
         {
             return Err(Error::Response);
         }

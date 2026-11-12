@@ -1,4 +1,3 @@
-use crate::error::{Error, Result};
 use serde::{Deserialize, Serialize};
 use slack_morphism::{SlackChannelId, SlackTeamId, SlackUserId};
 
@@ -38,20 +37,6 @@ impl User {
             .flatten()
             .any(|candidate| candidate.eq_ignore_ascii_case(name))
     }
-}
-
-pub(crate) fn parse_user(value: &str) -> Result<SlackUserId> {
-    if value.len() < 2
-        || !value.starts_with(['U', 'W'])
-        || !value
-            .bytes()
-            .all(|byte| byte.is_ascii_uppercase() || byte.is_ascii_digit())
-    {
-        return Err(Error::Arguments(
-            "Use a user ID starting with U or W, not a name, email, or conversation ID.",
-        ));
-    }
-    Ok(SlackUserId(value.to_owned()))
 }
 
 #[derive(Debug, Serialize)]

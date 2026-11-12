@@ -1,6 +1,7 @@
 use crate::auth::{Credentials, Identity, Kind, Realm, Settings, Workspace};
 use crate::error::{Error, Result};
-use crate::messages::{Draft, Sent, parse_timestamp};
+use crate::ids::parse_timestamp;
+use crate::messages::{Draft, Sent};
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
 use slack_morphism::api::{SlackApiAuthTestResponse, SlackApiChatPostMessageRequest};
 use slack_morphism::errors::SlackClientError;

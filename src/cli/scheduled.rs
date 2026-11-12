@@ -5,9 +5,10 @@ use super::{
 };
 use crate::auth::{Credentials, ProfileView, Store};
 use crate::error::{Error, Result};
-use crate::messages::{Content, parse_channel};
+use crate::ids::{parse_channel, parse_scheduled_message};
+use crate::messages::Content;
 use crate::output::{self, Output};
-use crate::scheduled::{parse_id, validate_time};
+use crate::scheduled::validate_time;
 use crate::slack::{CursorPage, Slack};
 use chrono::{DateTime, FixedOffset, Utc};
 use clap::{Args, Subcommand};
@@ -40,7 +41,7 @@ pub(super) enum ScheduledCommand {
     Cancel {
         #[arg(value_parser = parse_channel)]
         conversation: SlackChannelId,
-        #[arg(value_parser = parse_id)]
+        #[arg(value_parser = parse_scheduled_message)]
         scheduled_message_id: String,
         #[command(flatten)]
         paging: Paging,

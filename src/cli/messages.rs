@@ -2,9 +2,8 @@ use super::write::{Approval, SendInput, WriteInput, WriteOptions};
 use super::{Paging, Traversal};
 use crate::auth::{Credentials, ProfileView, Store};
 use crate::error::{Error, Result};
-use crate::messages::{
-    Change, Content, Draft, MessageLink, parse_channel, parse_reaction, parse_timestamp,
-};
+use crate::ids::{parse_channel, parse_timestamp};
+use crate::messages::{Change, Content, Draft, MessageLink, parse_reaction};
 use crate::output::{self, Output};
 use crate::slack::{
     CursorPage, MAX_SEARCH_PAGE, MAX_SEARCH_SIZE, SearchPage, Slack, ThreadRequest,

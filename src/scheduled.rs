@@ -33,12 +33,3 @@ pub(crate) fn validate_time(time: DateTime<FixedOffset>, now: DateTime<Utc>) -> 
     }
     Ok(time.timestamp())
 }
-
-pub(crate) fn parse_id(value: &str) -> Result<String> {
-    if value.is_empty() || !value.bytes().all(|byte| byte.is_ascii_alphanumeric()) {
-        return Err(Error::Arguments(
-            "Use the explicit scheduled_message_id returned by Slack.",
-        ));
-    }
-    Ok(value.to_owned())
-}

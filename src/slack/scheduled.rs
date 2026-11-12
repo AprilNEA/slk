@@ -1,8 +1,9 @@
 use super::{CursorPage, Page, Slack, pagination};
 use crate::auth::Credentials;
 use crate::error::{Error, Result};
+use crate::ids::parse_scheduled_message;
 use crate::messages::Draft;
-use crate::scheduled::{Receipt, Scheduled, parse_id};
+use crate::scheduled::{Receipt, Scheduled};
 use serde::Deserialize;
 use serde_json::json;
 use slack_morphism::{
@@ -30,7 +31,7 @@ impl<C: SlackClientHttpConnector + Send + Sync> Slack<C> {
             .await?;
         if receipt.channel_id != draft.channel_id
             || receipt.post_at != post_at
-            || parse_id(&receipt.scheduled_message_id).is_err()
+            || parse_scheduled_message(&receipt.scheduled_message_id).is_err()
         {
             return Err(Error::WriteOutcomeUnknown { slack_error: None });
         }
@@ -56,7 +57,7 @@ impl<C: SlackClientHttpConnector + Send + Sync> Slack<C> {
                 .await?;
             if response.scheduled_messages.iter().any(|message| {
                 message.receipt.channel_id != *channel
-                    || parse_id(&message.receipt.scheduled_message_id).is_err()
+                    || parse_scheduled_message(&message.receipt.scheduled_message_id).is_err()
             }) {
                 return Err(Error::Response);
             }

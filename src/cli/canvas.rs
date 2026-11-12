@@ -1,7 +1,7 @@
 use super::write::{Approval, BodyInput, WriteOptions};
 use crate::auth::{Credentials, ProfileView, Store};
 use crate::error::{Error, Result};
-use crate::files::parse_file;
+use crate::ids::{parse_canvas, parse_section};
 use crate::output::{Output, canvas as output};
 use crate::slack::{ContentType, Slack};
 use clap::{ArgGroup, Args, Subcommand, builder::NonEmptyStringValueParser};
@@ -218,23 +218,6 @@ impl Prepared {
         };
         Ok(Output::Canvas(result))
     }
-}
-
-fn parse_canvas(value: &str) -> Result<SlackCanvasId> {
-    Ok(SlackCanvasId(parse_file(value)?.0))
-}
-
-fn parse_section(value: &str) -> Result<SlackCanvasSectionId> {
-    if value.is_empty()
-        || value
-            .chars()
-            .any(|ch| ch.is_whitespace() || ch.is_control())
-    {
-        return Err(Error::Arguments(
-            "Use a nonempty section ID returned by canvas sections, without whitespace or controls.",
-        ));
-    }
-    Ok(SlackCanvasSectionId(value.to_owned()))
 }
 
 #[cfg(test)]

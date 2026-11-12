@@ -254,19 +254,5 @@ fn check_status(response: &Response) -> Result<()> {
     }
 }
 
-pub(crate) fn parse_file(value: &str) -> Result<SlackFileId> {
-    if value.len() < 2
-        || !value.starts_with('F')
-        || !value
-            .bytes()
-            .all(|byte| byte.is_ascii_uppercase() || byte.is_ascii_digit())
-    {
-        return Err(Error::Arguments(
-            "Use an explicit Slack file ID starting with F, not a URL.",
-        ));
-    }
-    Ok(SlackFileId(value.to_owned()))
-}
-
 #[cfg(test)]
 pub(crate) mod tests;

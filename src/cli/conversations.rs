@@ -4,10 +4,9 @@ use super::{
 };
 use crate::auth::{Credentials, ProfileView, Store};
 use crate::error::{Error, Result};
-use crate::messages::{parse_channel, parse_timestamp};
+use crate::ids::{parse_channel, parse_timestamp, parse_user};
 use crate::output::{Output, conversations as output};
 use crate::slack::{ConversationAction, CursorPage, Slack};
-use crate::users::parse_user;
 use clap::{Args, Subcommand, ValueEnum};
 use slack_morphism::{
     SlackChannelId, SlackClientHttpConnector, SlackConversationType, SlackTs, SlackUserId,

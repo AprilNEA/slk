@@ -2,6 +2,7 @@ use super::{Slack, map_write_error};
 use crate::auth::Credentials;
 use crate::error::{Error, Result};
 use crate::files::{File, FileUrl, Transfer, Upload};
+use crate::ids::parse_file;
 use serde::Deserialize;
 use slack_morphism::api::{
     SlackApiFilesComplete, SlackApiFilesCompleteUploadExternalRequest,
@@ -66,7 +67,7 @@ impl<C: SlackClientHttpConnector + Send + Sync> Slack<C> {
             ))
             .await
             .map_err(map_write_error)?;
-        crate::files::parse_file(ticket.file_id.value()).map_err(|_| Error::Response)?;
+        parse_file(ticket.file_id.value()).map_err(|_| Error::Response)?;
         let destination = FileUrl::try_from(ticket.upload_url.0)?;
         destination.check_realm(credentials.realm())?;
         transfer
