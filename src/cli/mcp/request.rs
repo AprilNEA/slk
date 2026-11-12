@@ -91,8 +91,7 @@ impl Request {
                     message(&mut input.input)?;
                 }
                 MessageCommand::Edit { input, .. } => message(input)?,
-                MessageCommand::Channels(_)
-                | MessageCommand::Search { .. }
+                MessageCommand::Search { .. }
                 | MessageCommand::Read { .. }
                 | MessageCommand::Get { .. }
                 | MessageCommand::Thread { .. }
@@ -253,8 +252,7 @@ fn read_only(command: &Command) -> bool {
         Command::Auth { command } => matches!(command, AuthCommand::Status { .. }),
         Command::Messages(command) => matches!(
             command.as_ref(),
-            MessageCommand::Channels(_)
-                | MessageCommand::Search { .. }
+            MessageCommand::Search { .. }
                 | MessageCommand::Read { .. }
                 | MessageCommand::Get { .. }
                 | MessageCommand::Thread { .. }
@@ -270,7 +268,9 @@ fn read_only(command: &Command) -> bool {
                 ChannelCommand::Info { .. } | ChannelCommand::Members { .. }
             ),
             ConversationCommand::GroupDm { command } => matches!(command, GroupCommand::List(_)),
-            ConversationCommand::Unread(_) | ConversationCommand::Workspace => true,
+            ConversationCommand::Channels(_)
+            | ConversationCommand::Unread(_)
+            | ConversationCommand::Workspace => true,
         },
         Command::Files { command, .. } => matches!(command, FileCommand::Info { .. }),
         Command::Schedule { command } => matches!(command, ScheduledCommand::List { .. }),

@@ -1,7 +1,7 @@
-use super::{channel_text, identity_text, page_text, resolution_text, terminal_text};
+use super::{identity_text, page_text, resolution_text, terminal_text};
 use crate::auth::ProfileView;
 use crate::model::users::{OpenedDm, User};
-use crate::slack::{Channel, Page, Resolution};
+use crate::slack::{Page, Resolution};
 use serde::Serialize;
 use slack_morphism::prelude::ValueStruct;
 
@@ -11,7 +11,6 @@ pub(crate) enum Output {
     Users(Page<User>),
     User(User),
     ResolvedUsers(Resolution<User>),
-    ResolvedChannels(Resolution<Channel>),
     DmPreview {
         dry_run: bool,
         #[serde(flatten)]
@@ -29,7 +28,6 @@ impl Output {
             }
             Self::User(user) => user_text(user),
             Self::ResolvedUsers(result) => resolution_text(result, user_text),
-            Self::ResolvedChannels(result) => resolution_text(result, channel_text),
             Self::DmPreview {
                 profile, target, ..
             } => format!(

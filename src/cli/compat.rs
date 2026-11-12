@@ -1,8 +1,8 @@
 use super::Paging;
-use super::conversations::{self, ChannelCommand, ConversationCommand};
+use super::conversations::{ChannelCommand, ConversationCommand};
 use super::messages::{self, MessageCommand, Target};
 use super::write::{BodyInput, SendInput, WriteInput, WriteOptions};
-use crate::app::{Connection, Prompt};
+use crate::app::{self, Connection, Prompt};
 use crate::auth::{ProfileView, Store};
 use crate::error::{Error, Result};
 use crate::ids::{parse_channel, parse_timestamp};
@@ -211,7 +211,7 @@ impl From<Body> for WriteInput {
 pub(super) enum Prepared {
     Messages(messages::Prepared),
     History(messages::Prepared),
-    Members(conversations::Prepared),
+    Conversations(app::Request),
 }
 
 impl Command {
@@ -231,7 +231,11 @@ impl Command {
             Self::Conversations {
                 command: Conversation::List(paging),
                 ..
-            } => MessageCommand::Channels(paging),
+            } => {
+                return ConversationCommand::Channels(paging)
+                    .prepare(store, selected, json)
+                    .map(|(profile, request)| (profile, Prepared::Conversations(request)));
+            }
             Self::Conversations {
                 command:
                     Conversation::Read {
@@ -292,7 +296,7 @@ impl Command {
                     },
                 }
                 .prepare(store, selected, json)
-                .map(|(profile, prepared)| (profile, Prepared::Members(prepared)));
+                .map(|(profile, request)| (profile, Prepared::Conversations(request)));
             }
             Self::Messages {
                 command:
@@ -383,7 +387,7 @@ impl Prepared {
     ) -> Result<Output> {
         match self {
             Self::Messages(prepared) => prepared.execute(connection, prompt).await,
-            Self::Members(prepared) => prepared.execute(connection, prompt).await,
+            Self::Conversations(request) => request.execute(connection, prompt).await,
             Self::History(prepared) => {
                 let mut output = prepared.execute(connection, prompt).await?;
                 if let Output::Messages(page) = &mut output {

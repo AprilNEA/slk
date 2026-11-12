@@ -213,9 +213,7 @@ async fn execute_with_store(cli: Cli, store: &mut Store) -> Result<Output> {
         }
         Command::Users(command) => command.prepare(store, cli.profile.as_deref(), cli.json)?,
         Command::Conversations(command) => {
-            let (profile, prepared) = command.prepare(store, cli.profile.as_deref(), cli.json)?;
-            let connection = Connection::open(store, profile).await?;
-            return prepared.execute(connection, &write::Terminal).await;
+            command.prepare(store, cli.profile.as_deref(), cli.json)?
         }
         Command::Files { command, selector } => {
             let selected = selector.resolve(store, cli.profile.as_deref())?;

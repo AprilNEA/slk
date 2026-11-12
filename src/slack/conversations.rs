@@ -2,7 +2,8 @@ use super::{CursorPage, Page, Slack, pagination};
 use crate::auth::{Credentials, Kind};
 use crate::error::{Error, Result};
 use crate::messages::{Message, MessageLink, MessageTarget};
-use serde::{Deserialize, Serialize};
+use crate::model::conversations::Channel;
+use serde::Deserialize;
 use serde_json::Value;
 use slack_morphism::prelude::ValueStruct;
 use slack_morphism::{
@@ -11,18 +12,8 @@ use slack_morphism::{
 };
 
 mod operations;
-pub(crate) use operations::{ChannelDetails, ConversationAction, OpenedGroup};
 
 pub(super) const CONVERSATION_TYPES: &str = "public_channel,private_channel,mpim,im";
-
-#[derive(Debug, Serialize)]
-pub(crate) struct Channel {
-    pub channel_id: SlackChannelId,
-    pub name: Option<String>,
-    pub conversation_type: Option<SlackConversationType>,
-    pub user_id: Option<String>,
-    pub is_archived: bool,
-}
 
 #[derive(Deserialize)]
 struct Conversation {

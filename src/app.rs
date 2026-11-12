@@ -10,12 +10,14 @@ use slack_morphism::hyper_tokio::SlackClientHyperHttpsConnector;
 use std::future::Future;
 
 pub(crate) mod canvas;
+pub(crate) mod conversations;
 pub(crate) mod files;
 pub(crate) mod users;
 
 /// One validated operation on Slack, ready to run on a [`Connection`].
 pub(crate) enum Request {
     Users(users::Request),
+    Conversations(conversations::Request),
     Files(files::Request),
     Canvas(canvas::Request),
 }
@@ -28,6 +30,10 @@ impl Request {
     ) -> Result<Output> {
         match self {
             Self::Users(request) => request.execute(connection, prompt).await.map(Output::Users),
+            Self::Conversations(request) => request
+                .execute(connection, prompt)
+                .await
+                .map(Output::Conversations),
             Self::Files(request) => request.execute(connection, prompt).await.map(Output::Files),
             Self::Canvas(request) => request
                 .execute(connection, prompt)

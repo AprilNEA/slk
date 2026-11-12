@@ -12,10 +12,6 @@ pub(crate) enum Request {
         name: String,
         page: CursorPage,
     },
-    ResolveChannel {
-        name: String,
-        page: CursorPage,
-    },
     Dm {
         user: SlackUserId,
         approval: Approval,
@@ -45,16 +41,6 @@ impl Request {
                 let mut candidates = slack.users(credentials, &page).await?;
                 candidates.data.retain(|user| user.matches_name(&name));
                 Ok(Output::ResolvedUsers(candidates.resolve(&page)))
-            }
-            Self::ResolveChannel { name, page } => {
-                let mut candidates = slack.channels(credentials, &page).await?;
-                candidates.data.retain(|channel| {
-                    channel
-                        .name
-                        .as_ref()
-                        .is_some_and(|candidate| candidate.eq_ignore_ascii_case(&name))
-                });
-                Ok(Output::ResolvedChannels(candidates.resolve(&page)))
             }
             Self::Dm { user, approval } => {
                 let target = slack.user(credentials, &user).await?;

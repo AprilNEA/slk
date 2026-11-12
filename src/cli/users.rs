@@ -1,6 +1,6 @@
 use super::Paging;
 use super::write::WriteOptions;
-use crate::app::{self, users::Request};
+use crate::app::{self, conversations, users::Request};
 use crate::auth::{ProfileView, Store};
 use crate::error::{Error, Result};
 use crate::ids::parse_user;
@@ -93,7 +93,10 @@ impl UserCommand {
                 let page = paging.resolve(store.settings());
                 match kind {
                     ResolveKind::User => Request::Resolve { name, page },
-                    ResolveKind::Channel => Request::ResolveChannel { name, page },
+                    ResolveKind::Channel => {
+                        let request = conversations::Request::Resolve { name, page };
+                        return Ok((profile, app::Request::Conversations(request)));
+                    }
                 }
             }
             Self::Dm { user, options } => Request::Dm {

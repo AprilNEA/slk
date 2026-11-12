@@ -1,9 +1,10 @@
-use super::{CONVERSATION_TYPES, Channel, Conversation};
+use super::{CONVERSATION_TYPES, Conversation};
 use crate::auth::Credentials;
 use crate::error::{Error, Result};
 use crate::ids::parse_channel;
+use crate::model::conversations::{ChannelDetails, ConversationAction, OpenedGroup};
 use crate::slack::{CursorPage, Page, Slack, pagination};
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 use serde_json::json;
 use slack_morphism::api::{
     SlackApiConversationsArchiveRequest, SlackApiConversationsCloseRequest,
@@ -14,18 +15,8 @@ use slack_morphism::api::{
 };
 use slack_morphism::{
     SlackChannelCurrentState, SlackChannelId, SlackChannelTopicInfo, SlackClientHttpConnector,
-    SlackConversationType, SlackResponseMetadata, SlackTeamInfo, SlackTs, SlackUserId,
+    SlackConversationType, SlackResponseMetadata, SlackTeamInfo, SlackUserId,
 };
-
-#[derive(Debug, Serialize)]
-pub(crate) struct ChannelDetails {
-    #[serde(flatten)]
-    pub channel: Channel,
-    pub is_member: Option<bool>,
-    pub topic: Option<SlackChannelTopicInfo>,
-    #[serde(flatten)]
-    pub read_state: SlackChannelCurrentState,
-}
 
 #[derive(Deserialize)]
 struct DetailedConversation {
@@ -58,54 +49,11 @@ struct JoinedResponse {
     response_metadata: Option<SlackResponseMetadata>,
 }
 
-#[derive(Debug, Serialize)]
-#[serde(tag = "action", rename_all = "snake_case")]
-pub(crate) enum ConversationAction {
-    Join,
-    Leave,
-    Archive,
-    Topic { topic: String },
-    Mark { ts: SlackTs },
-    ResumeGroup,
-    CloseGroup,
-}
-
-impl ConversationAction {
-    pub(crate) fn validate(&self, details: &ChannelDetails) -> Result<()> {
-        let kind = details.channel.conversation_type.as_ref();
-        let allowed = match self {
-            Self::Mark { .. } => true,
-            Self::ResumeGroup | Self::CloseGroup => kind == Some(&SlackConversationType::Mpim),
-            Self::Join => kind == Some(&SlackConversationType::Public),
-            Self::Leave | Self::Archive | Self::Topic { .. } => {
-                matches!(
-                    kind,
-                    Some(SlackConversationType::Public | SlackConversationType::Private)
-                )
-            }
-        };
-        if !allowed {
-            return Err(Error::Arguments(
-                "The conversation type does not support this command. No change was attempted.",
-            ));
-        }
-        Ok(())
-    }
-}
-
 #[derive(Deserialize)]
 struct GroupResponse {
     channel: DetailedConversation,
     already_open: Option<bool>,
     no_op: Option<bool>,
-}
-
-#[derive(Debug, Serialize)]
-pub(crate) struct OpenedGroup {
-    pub channel: ChannelDetails,
-    pub requested_users: Vec<SlackUserId>,
-    pub already_open: Option<bool>,
-    pub no_op: Option<bool>,
 }
 
 impl<C: SlackClientHttpConnector + Send + Sync> Slack<C> {

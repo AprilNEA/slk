@@ -2,7 +2,7 @@ use crate::auth::{Kind, ProfileView};
 use crate::error::{Error, Result};
 use crate::messages::{Change, Changed, Draft, Message, Sent};
 use crate::scheduled::{Receipt, Scheduled};
-use crate::slack::{Channel, Page, Pagination, Resolution, ResolutionStatus};
+use crate::slack::{Page, Pagination, Resolution, ResolutionStatus};
 use serde::Serialize;
 use slack_morphism::SlackChannelId;
 use slack_morphism::prelude::ValueStruct;
@@ -29,7 +29,6 @@ pub(crate) enum Output {
         profile: String,
         local_credentials_removed: bool,
     },
-    Channels(Page<Channel>),
     Messages(Page<Message>),
     Message(Message),
     Pins {
@@ -111,10 +110,6 @@ impl Output {
                     "Removed local credentials for {}. The Slack session was not revoked.",
                     terminal_text(profile)
                 ),
-                Self::Channels(page) => {
-                    let rows = page.data.iter().map(channel_text).collect();
-                    page_text(rows, &page.pagination)
-                }
                 Self::Messages(page) => {
                     let rows = page.data.iter().map(message_text).collect();
                     page_text(rows, &page.pagination)
@@ -206,29 +201,6 @@ impl Output {
         };
         writeln!(writer, "{rendered}").map_err(|error| Error::io("write command output", error))
     }
-}
-
-fn channel_text(channel: &Channel) -> String {
-    format!(
-        "{}\t{}\t{}{}",
-        terminal_text(channel.channel_id.value()),
-        channel
-            .conversation_type
-            .as_ref()
-            .map_or_else(|| "unknown".to_owned(), ToString::to_string),
-        terminal_text(
-            channel
-                .name
-                .as_deref()
-                .or(channel.user_id.as_deref())
-                .unwrap_or("-")
-        ),
-        if channel.is_archived {
-            " (archived)"
-        } else {
-            ""
-        },
-    )
 }
 
 fn resolution_text<T>(resolution: &Resolution<T>, row: impl Fn(&T) -> String) -> String {

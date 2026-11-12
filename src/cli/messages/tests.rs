@@ -353,7 +353,7 @@ async fn rejected_sessions_require_explicit_login_without_retry_or_fallback() {
                 .expect(1)
                 .mount(&server)
                 .await;
-            let error = execute(prepare(&["channels"], credentials.kind())
+            let error = execute(prepare(&["read", "C1"], credentials.kind())
                 .unwrap(), &server, &credentials)
                 .await
                 .err()

@@ -1,14 +1,18 @@
 use super::users::user_text;
-use super::{channel_text, identity_text, page_text, terminal_text};
+use super::{identity_text, page_text, resolution_text, terminal_text};
 use crate::auth::ProfileView;
+use crate::model::conversations::{Channel, ChannelDetails, ConversationAction, OpenedGroup};
 use crate::model::users::User;
-use crate::slack::{ChannelDetails, ConversationAction, OpenedGroup, Page};
+use crate::slack::{Page, Resolution};
 use serde::Serialize;
+use slack_morphism::prelude::ValueStruct;
 use slack_morphism::{SlackChannelId, SlackTeamInfo, SlackUserId};
 
 #[derive(Serialize)]
 #[serde(untagged)]
 pub(crate) enum Output {
+    Channels(Page<Channel>),
+    ResolvedChannels(Resolution<Channel>),
     Info(ChannelDetails),
     Members {
         channel_id: SlackChannelId,
@@ -52,6 +56,11 @@ pub(crate) enum Output {
 impl Output {
     pub(super) fn text(&self) -> String {
         match self {
+            Self::Channels(page) => page_text(
+                page.data.iter().map(channel_text).collect(),
+                &page.pagination,
+            ),
+            Self::ResolvedChannels(result) => resolution_text(result, channel_text),
             Self::Info(channel) => details_text(channel),
             Self::Members { channel_id, page } => format!(
                 "Conversation: {}\n{}",
@@ -119,6 +128,29 @@ impl Output {
             ),
         }
     }
+}
+
+fn channel_text(channel: &Channel) -> String {
+    format!(
+        "{}\t{}\t{}{}",
+        terminal_text(channel.channel_id.value()),
+        channel
+            .conversation_type
+            .as_ref()
+            .map_or_else(|| "unknown".to_owned(), ToString::to_string),
+        terminal_text(
+            channel
+                .name
+                .as_deref()
+                .or(channel.user_id.as_deref())
+                .unwrap_or("-")
+        ),
+        if channel.is_archived {
+            " (archived)"
+        } else {
+            ""
+        },
+    )
 }
 
 fn details_text(details: &ChannelDetails) -> String {

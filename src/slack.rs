@@ -24,9 +24,7 @@ mod scheduled;
 mod search;
 mod users;
 
-pub(crate) use conversations::{
-    Channel, ChannelDetails, ConversationAction, OpenedGroup, ThreadRequest,
-};
+pub(crate) use conversations::ThreadRequest;
 pub(crate) use pagination::{
     CursorPage, MAX_PAGE_SIZE, Page, Pagination, Resolution, ResolutionStatus,
 };

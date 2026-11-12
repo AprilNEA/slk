@@ -1,8 +1,9 @@
-use super::{Output, terminal_text, users};
+use super::{Output, conversations, terminal_text, users};
 use crate::auth::{Identity, Kind, ProfileView, Workspace};
 use crate::messages::{Change, Message, MessageText};
+use crate::model::conversations::Channel;
 use crate::model::users::User;
-use crate::slack::{Channel, Page, Pagination, Resolution, ResolutionStatus};
+use crate::slack::{Page, Pagination, Resolution, ResolutionStatus};
 use serde_json::{Value, json};
 use slack_morphism::SlackConversationType;
 
@@ -114,7 +115,7 @@ fn channel_output_preserves_archive_status_and_continuation_after_untrusted_fiel
     let name = "decommissioned\x1b]0;discarded title";
     let user = "U9\x1bP1;2|discarded data";
     let cursor = "later+/=\x1b]0;discarded cursor";
-    let output = Output::Channels(Page {
+    let output = Output::Conversations(conversations::Output::Channels(Page {
         data: vec![
             Channel {
                 channel_id: "C1".into(),
@@ -135,7 +136,7 @@ fn channel_output_preserves_archive_status_and_continuation_after_untrusted_fiel
             next_cursor: Some(cursor.into()),
             has_more: None,
         },
-    });
+    }));
     let mut text = Vec::new();
     output.write(false, &mut text).unwrap();
     let text = String::from_utf8(text).unwrap();

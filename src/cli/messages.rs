@@ -14,8 +14,6 @@ use slack_morphism::{SlackChannelId, SlackClientHttpConnector, SlackReactionName
 
 #[derive(Subcommand)]
 pub(super) enum MessageCommand {
-    /// List visible conversations without joining them; one page by default.
-    Channels(Paging),
     /// Search with RTS (user) or experimental legacy search (browser).
     Search {
         /// A native Slack query; quote queries containing spaces.
@@ -172,7 +170,6 @@ impl Destination {
 }
 
 enum Request {
-    Channels(CursorPage),
     Pins(SlackChannelId),
     Get(Target),
     Search {
@@ -218,7 +215,6 @@ impl MessageCommand {
         let profile = store.select(selected)?;
         let settings = store.settings();
         let request = match self {
-            Self::Channels(paging) => Request::Channels(paging.resolve(settings)),
             Self::Search {
                 query,
                 compatibility_query,
@@ -363,10 +359,6 @@ impl Prepared {
         } = connection;
         let credentials = &credentials;
         match self.request {
-            Request::Channels(page) => slack
-                .channels(credentials, &page)
-                .await
-                .map(Output::Channels),
             Request::Pins(channel_id) => {
                 let data = slack.pins(credentials, &channel_id).await?;
                 Ok(Output::Pins { channel_id, data })
